@@ -92,7 +92,6 @@
 
 function isMarketOpen() {
     const now = new Date();
-
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
     const ist = new Date(utc + (5.5 * 60 * 60 * 1000));
 
@@ -126,17 +125,17 @@ setInterval(updateMarketStatus, 60000);
 
 
 /* =========================
-   BACKGROUND IMAGE (SAFE)
+   BACKGROUND (FIXED & STABLE)
    ========================= */
 
 const themes = [
   "finance stock market trading",
   "ocean ship navigation horizon",
-  "mountains landscape sunrise",
-  "sky clouds sunset aerial",
-  "space galaxy stars universe",
-  "city skyline night lights",
-  "technology data system digital"
+  "mountains sunrise landscape",
+  "sky sunset clouds",
+  "space galaxy stars",
+  "city night skyline",
+  "technology digital network"
 ];
 
 function setBg(url) {
@@ -151,7 +150,6 @@ if (saved && (now - saved.time < THIRTY_MIN)) {
     setBg(saved.url);
 } else {
     const query = themes[Math.floor(Math.random() * themes.length)];
-
     const url = `https://source.unsplash.com/1600x900/?${encodeURIComponent(query)}`;
 
     setBg(url);
@@ -164,28 +162,27 @@ if (saved && (now - saved.time < THIRTY_MIN)) {
 
 
 /* =========================
-   QUOTE (FAIL SAFE)
+   QUOTE (100% FAILSAFE)
    ========================= */
 
 const quoteEl = document.getElementById("quote");
 
-const controller = new AbortController();
-const timeout = setTimeout(() => controller.abort(), 5000);
+const quotes = [
+    "Discipline beats prediction",
+    "Execution beats intention",
+    "Consistency compounds everything",
+    "Risk management is survival",
+    "Focus on process, not outcome",
+    "Small edges build big results"
+];
 
-fetch("https://api.quotable.io/random", {
-    signal: controller.signal
-})
-.then(res => {
-    clearTimeout(timeout);
-    if (!res.ok) throw new Error("HTTP error");
-    return res.json();
-})
-.then(data => {
-    quoteEl.innerText = data.content;
-})
-.catch(() => {
-    quoteEl.innerText = "Discipline beats prediction.";
-});
+function loadQuote() {
+    // Always works — no API dependency
+    const q = quotes[Math.floor(Math.random() * quotes.length)];
+    quoteEl.innerText = q;
+}
+
+loadQuote();
 
 </script>
 
