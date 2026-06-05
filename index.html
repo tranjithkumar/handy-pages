@@ -16,6 +16,8 @@
         background-position: center;
         background-repeat: no-repeat;
         background-attachment: fixed;
+
+        background-color: #0f172a; /* fallback always */
     }
 
     body::before {
@@ -125,44 +127,31 @@ setInterval(updateMarketStatus, 60000);
 
 
 /* =========================
-   BACKGROUND (FIXED & STABLE)
+   BACKGROUND (100% STABLE)
    ========================= */
 
-const themes = [
-  "finance stock market trading",
-  "ocean ship navigation horizon",
-  "mountains sunrise landscape",
-  "sky sunset clouds",
-  "space galaxy stars",
-  "city night skyline",
-  "technology digital network"
-];
-
 function setBg(url) {
-    document.body.style.backgroundImage = `url('${url}')`;
+    const img = new Image();
+
+    img.onload = () => {
+        document.body.style.backgroundImage = `url('${url}')`;
+    };
+
+    img.onerror = () => {
+        document.body.style.backgroundImage = "none";
+        document.body.style.backgroundColor = "#0f172a";
+    };
+
+    img.src = url;
 }
 
-const saved = JSON.parse(localStorage.getItem("bg_data") || "null");
-const now = Date.now();
-const THIRTY_MIN = 30 * 60 * 1000;
-
-if (saved && (now - saved.time < THIRTY_MIN)) {
-    setBg(saved.url);
-} else {
-    const query = themes[Math.floor(Math.random() * themes.length)];
-    const url = `https://source.unsplash.com/1600x900/?${encodeURIComponent(query)}`;
-
-    setBg(url);
-
-    localStorage.setItem("bg_data", JSON.stringify({
-        url,
-        time: now
-    }));
-}
+/* Picsum = stable direct image CDN */
+const url = "https://picsum.photos/1920/1080?random=" + Date.now();
+setBg(url);
 
 
 /* =========================
-   QUOTE (100% FAILSAFE)
+   QUOTE (NO API DEPENDENCY)
    ========================= */
 
 const quoteEl = document.getElementById("quote");
@@ -173,13 +162,12 @@ const quotes = [
     "Consistency compounds everything",
     "Risk management is survival",
     "Focus on process, not outcome",
-    "Small edges build big results"
+    "Small edges build big results",
+    "Control downside, upside takes care of itself"
 ];
 
 function loadQuote() {
-    // Always works — no API dependency
-    const q = quotes[Math.floor(Math.random() * quotes.length)];
-    quoteEl.innerText = q;
+    quoteEl.innerText = quotes[Math.floor(Math.random() * quotes.length)];
 }
 
 loadQuote();
