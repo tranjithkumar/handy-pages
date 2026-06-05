@@ -10,8 +10,25 @@
         margin: 0;
         font-family: Arial, sans-serif;
         padding: 40px;
-        background: #0f172a; /* clean dark base */
         color: white;
+
+        /* background image system */
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }
+
+    /* dark overlay for readability */
+    body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.45);
+        z-index: -1;
     }
 
     .header {
@@ -21,8 +38,7 @@
     }
 
     #market-status {
-        font-size: 10px;   /* SMALL ICON FIX */
-        line-height: 1;
+        font-size: 10px;
     }
 
     .welcome {
@@ -33,7 +49,7 @@
     #quote {
         margin-top: 15px;
         margin-bottom: 30px;
-        color: #cbd5e1;
+        color: #e5e7eb;
         font-style: italic;
     }
 
@@ -44,14 +60,15 @@
         cursor: pointer;
         display: block;
         margin-bottom: 12px;
-        background: #1e293b;
+
+        background: rgba(30,41,59,0.6);
         color: white;
         border: 1px solid #334155;
         border-radius: 6px;
     }
 
     button:hover {
-        background: #334155;
+        background: rgba(51,65,85,0.8);
     }
 </style>
 </head>
@@ -112,6 +129,41 @@ function updateMarketStatus() {
 
 updateMarketStatus();
 setInterval(updateMarketStatus, 60000);
+
+
+/* =========================
+   BACKGROUND IMAGES (FIXED)
+   ========================= */
+
+const themes = [
+    "finance,stock market,trading,charts",
+    "ship,ocean,navigation,voyage,horizon",
+    "mountains,landscape,sunrise,nature",
+    "sky,clouds,sunset,aerial",
+    "space,galaxy,stars,universe",
+    "city,skyline,night city,lights",
+    "technology,digital,system,data"
+];
+
+const saved = JSON.parse(localStorage.getItem("bg_data"));
+const now = Date.now();
+const THIRTY_MIN = 30 * 60 * 1000;
+
+let bgUrl;
+
+if (saved && (now - saved.time < THIRTY_MIN)) {
+    bgUrl = saved.url;
+} else {
+    const theme = themes[Math.floor(Math.random() * themes.length)];
+    bgUrl = `https://source.unsplash.com/1600x900/?${theme}&sig=${Math.random()}`;
+
+    localStorage.setItem("bg_data", JSON.stringify({
+        url: bgUrl,
+        time: now
+    }));
+}
+
+document.body.style.backgroundImage = `url(${bgUrl})`;
 
 
 /* =========================
