@@ -127,7 +127,7 @@ setInterval(updateMarketStatus, 60000);
 
 
 /* =========================
-   BACKGROUND (SAFE)
+   BACKGROUND (STABLE OFFLINE-SAFE)
    ========================= */
 
 function setBg(url) {
@@ -150,77 +150,42 @@ setBg(bgUrl);
 
 
 /* =========================
-   QUOTE SYSTEM (FIXED + SAFE)
+   QUOTES (OFFLINE SAFE - NO API)
    ========================= */
 
 const quoteEl = document.getElementById("quote");
 
-const fallbackQuotes = [
+const quotes = [
     "Discipline beats prediction",
     "Execution beats intention",
     "Consistency compounds everything",
     "Risk management is survival",
     "Focus on process, not outcome",
-    "Control downside, upside takes care of itself"
+    "Control downside, upside takes care of itself",
+    "Small edges build big results",
+    "Avoid emotional execution",
+    "Survival first, profits later",
+    "Process over outcome"
 ];
 
-let lastQuote = "";
+let lastIndex = -1;
 
-/* safe fetch with timeout */
-async function fetchQuote() {
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 4000);
+function loadQuote() {
+    let index;
 
-        const res = await fetch("https://api.quotable.io/random", {
-            signal: controller.signal
-        });
+    do {
+        index = Math.floor(Math.random() * quotes.length);
+    } while (index === lastIndex && quotes.length > 1);
 
-        clearTimeout(timeout);
-
-        if (!res.ok) throw new Error("bad response");
-
-        const data = await res.json();
-        return data.content;
-
-    } catch {
-        return null;
-    }
+    lastIndex = index;
+    quoteEl.innerText = quotes[index];
 }
 
-/* fallback picker */
-function pickFallback() {
-    return fallbackQuotes[Math.floor(Math.random() * fallbackQuotes.length)];
-}
+/* initial */
+loadQuote();
 
-/* safe renderer */
-function setQuote(text) {
-    if (!text) text = pickFallback();
-
-    if (text === lastQuote) return;
-
-    lastQuote = text;
-    quoteEl.innerText = text;
-}
-
-/* IMPORTANT FIX:
-   - delay API call after page fully loads
-   - prevents startup security instability */
-window.addEventListener("load", () => {
-    setTimeout(updateQuote, 1200);
-});
-
-/* main updater */
-async function updateQuote() {
-    const live = await fetchQuote();
-    setQuote(live || pickFallback());
-}
-
-/* rotate every 60 seconds */
-setInterval(updateQuote, 60 * 1000);
-
-/* initial fallback (instant UI) */
-quoteEl.innerText = pickFallback();
+/* change every hour */
+setInterval(loadQuote, 60 * 60 * 1000);
 
 </script>
 
