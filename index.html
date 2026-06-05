@@ -10,50 +10,31 @@
         margin: 0;
         font-family: Arial, sans-serif;
         padding: 40px;
+        background: #0f172a; /* clean dark base */
         color: white;
-
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-    }
-
-    /* readability layer */
-    body::before {
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.45);
-        z-index: -1;
     }
 
     .header {
         display: flex;
         align-items: center;
-        gap: 10px;
-        position: relative;
-        z-index: 2;
+        gap: 8px;
     }
 
     #market-status {
-        font-size: 22px;
+        font-size: 10px;   /* SMALL ICON FIX */
+        line-height: 1;
     }
 
     .welcome {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: bold;
     }
 
     #quote {
         margin-top: 15px;
         margin-bottom: 30px;
-        color: #e5e7eb;
+        color: #cbd5e1;
         font-style: italic;
-        position: relative;
-        z-index: 2;
     }
 
     button {
@@ -62,9 +43,15 @@
         font-size: 13px;
         cursor: pointer;
         display: block;
-        margin-bottom: 15px;
-        position: relative;
-        z-index: 2;
+        margin-bottom: 12px;
+        background: #1e293b;
+        color: white;
+        border: 1px solid #334155;
+        border-radius: 6px;
+    }
+
+    button:hover {
+        background: #334155;
     }
 </style>
 </head>
@@ -89,7 +76,7 @@
 <script>
 
 /* =========================
-   MARKET STATUS (IST LOGIC)
+   MARKET STATUS (IST)
    ========================= */
 
 function isMarketOpen() {
@@ -102,7 +89,6 @@ function isMarketOpen() {
     const hour = ist.getHours();
     const min = ist.getMinutes();
 
-    // weekend closed
     if (day === 0 || day === 6) return false;
 
     const current = hour * 60 + min;
@@ -129,42 +115,7 @@ setInterval(updateMarketStatus, 60000);
 
 
 /* =========================
-   BACKGROUND ROTATION (30 MIN)
-   ========================= */
-
-const themes = [
-    "finance,stock market,trading,charts,candlestick",
-    "ship,ocean,sea,navigation,compass,voyage,horizon",
-    "mountains,landscape,forest,river,sunrise",
-    "sky,clouds,sunset,aerial,altitude",
-    "space,galaxy,stars,universe,nebula",
-    "city,skyline,skyscraper,night city,lights",
-    "technology,data,network,digital,system"
-];
-
-const saved = JSON.parse(localStorage.getItem("bg_data"));
-const now = Date.now();
-const THIRTY_MIN = 30 * 60 * 1000;
-
-let bgUrl;
-
-if (saved && (now - saved.time < THIRTY_MIN)) {
-    bgUrl = saved.url;
-} else {
-    const theme = themes[Math.floor(Math.random() * themes.length)];
-    bgUrl = `https://source.unsplash.com/1600x900/?${theme}&sig=${Math.random()}`;
-
-    localStorage.setItem("bg_data", JSON.stringify({
-        url: bgUrl,
-        time: now
-    }));
-}
-
-document.body.style.backgroundImage = `url(${bgUrl})`;
-
-
-/* =========================
-   RANDOM QUOTE (INFINITE)
+   RANDOM QUOTE
    ========================= */
 
 fetch("https://api.quotable.io/random")
