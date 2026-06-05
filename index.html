@@ -89,7 +89,7 @@
 <script>
 
 /* =========================
-   MARKET STATUS (UNCHANGED)
+   MARKET STATUS
    ========================= */
 
 function isMarketOpen() {
@@ -127,7 +127,7 @@ setInterval(updateMarketStatus, 60000);
 
 
 /* =========================
-   BACKGROUND (STABLE)
+   BACKGROUND (SAFE)
    ========================= */
 
 function setBg(url) {
@@ -150,7 +150,7 @@ setBg(bgUrl);
 
 
 /* =========================
-   LIVE QUOTES (ENDLESS + FAILSAFE)
+   QUOTE SYSTEM (FIXED + SAFE)
    ========================= */
 
 const quoteEl = document.getElementById("quote");
@@ -166,10 +166,11 @@ const fallbackQuotes = [
 
 let lastQuote = "";
 
-async function fetchLiveQuote() {
+/* safe fetch with timeout */
+async function fetchQuote() {
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
+        const timeout = setTimeout(() => controller.abort(), 4000);
 
         const res = await fetch("https://api.quotable.io/random", {
             signal: controller.signal
@@ -177,42 +178,49 @@ async function fetchLiveQuote() {
 
         clearTimeout(timeout);
 
-        if (!res.ok) throw new Error("Bad response");
+        if (!res.ok) throw new Error("bad response");
 
         const data = await res.json();
         return data.content;
 
-    } catch (e) {
+    } catch {
         return null;
     }
 }
 
+/* fallback picker */
 function pickFallback() {
-    return fallbackQuotes[
-        Math.floor(Math.random() * fallbackQuotes.length)
-    ];
+    return fallbackQuotes[Math.floor(Math.random() * fallbackQuotes.length)];
 }
 
+/* safe renderer */
 function setQuote(text) {
     if (!text) text = pickFallback();
 
-    // prevent immediate repetition
     if (text === lastQuote) return;
 
     lastQuote = text;
     quoteEl.innerText = text;
 }
 
+/* IMPORTANT FIX:
+   - delay API call after page fully loads
+   - prevents startup security instability */
+window.addEventListener("load", () => {
+    setTimeout(updateQuote, 1200);
+});
+
+/* main updater */
 async function updateQuote() {
-    const live = await fetchLiveQuote();
+    const live = await fetchQuote();
     setQuote(live || pickFallback());
 }
 
-/* initial load */
-updateQuote();
-
-/* endless rotation every 60 seconds */
+/* rotate every 60 seconds */
 setInterval(updateQuote, 60 * 1000);
+
+/* initial fallback (instant UI) */
+quoteEl.innerText = pickFallback();
 
 </script>
 
