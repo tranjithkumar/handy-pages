@@ -17,7 +17,7 @@
         background-repeat: no-repeat;
         background-attachment: fixed;
 
-        background-color: #0f172a; /* fallback always */
+        background-color: #0f172a;
     }
 
     body::before {
@@ -89,7 +89,7 @@
 <script>
 
 /* =========================
-   MARKET STATUS
+   MARKET STATUS (UNCHANGED)
    ========================= */
 
 function isMarketOpen() {
@@ -127,7 +127,7 @@ setInterval(updateMarketStatus, 60000);
 
 
 /* =========================
-   BACKGROUND (100% STABLE)
+   BACKGROUND (STABLE)
    ========================= */
 
 function setBg(url) {
@@ -145,13 +145,12 @@ function setBg(url) {
     img.src = url;
 }
 
-/* Picsum = stable direct image CDN */
-const url = "https://picsum.photos/1920/1080?random=" + Date.now();
-setBg(url);
+const bgUrl = "https://picsum.photos/1920/1080?random=" + Date.now();
+setBg(bgUrl);
 
 
 /* =========================
-   QUOTE (NO API DEPENDENCY)
+   QUOTE (HOURLY ROTATION FIX)
    ========================= */
 
 const quoteEl = document.getElementById("quote");
@@ -166,11 +165,24 @@ const quotes = [
     "Control downside, upside takes care of itself"
 ];
 
+function getHourSeed() {
+    const now = new Date();
+    return now.getFullYear() * 10000 +
+           now.getMonth() * 100 +
+           now.getDate() * 24 +
+           now.getHours();
+}
+
 function loadQuote() {
-    quoteEl.innerText = quotes[Math.floor(Math.random() * quotes.length)];
+    const seed = getHourSeed();
+    const index = seed % quotes.length;
+    quoteEl.innerText = quotes[index];
 }
 
 loadQuote();
+
+/* update every hour exactly */
+setInterval(loadQuote, 60 * 60 * 1000);
 
 </script>
 
