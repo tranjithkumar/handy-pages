@@ -5,14 +5,19 @@
     <title>Handy Pages</title><style>
     body {
         font-family: Arial, sans-serif;
-        text-align: center;
-        margin-top: 80px;
+        padding: 40px;
+        background: #f5f5f5;
+    }
+
+    .header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
 
     #market-status {
         color: #22c55e;
         font-size: 24px;
-        margin-right: 8px;
     }
 
     .welcome {
@@ -21,9 +26,10 @@
     }
 
     .quote {
-        margin-top: 20px;
-        margin-bottom: 40px;
+        margin-top: 15px;
+        margin-bottom: 30px;
         color: #555;
+        font-style: italic;
     }
 
     button {
@@ -31,11 +37,13 @@
         height: 45px;
         font-size: 16px;
         cursor: pointer;
+        display: block;
+        margin-bottom: 15px;
     }
 </style>
 
 </head>
-<body><div>
+<body><div class="header">
     <span id="market-status">●</span>
     <span class="welcome">Welcome Back Boss</span>
 </div>
@@ -47,8 +55,6 @@
 <button onclick="location.href='screeners/swing.html'">
     SWING
 </button>
-
-<br><br>
 
 <button onclick="location.href='screeners/after2pm.html'">
     AFTER2PM
