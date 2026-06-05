@@ -136,29 +136,37 @@ setInterval(updateMarketStatus, 60000);
    ========================= */
 
 const themes = [
-    "finance,stock market,trading,charts",
-    "ship,ocean,navigation,voyage,horizon",
-    "mountains,landscape,sunrise,nature",
-    "sky,clouds,sunset,aerial",
-    "space,galaxy,stars,universe",
-    "city,skyline,night city,lights",
-    "technology,digital,system,data"
+  "finance stock market trading",
+  "ocean ship navigation horizon",
+  "mountains landscape sunrise",
+  "sky clouds sunset aerial",
+  "space galaxy stars universe",
+  "city skyline night lights",
+  "technology data system digital"
 ];
 
 const saved = JSON.parse(localStorage.getItem("bg_data"));
 const now = Date.now();
 const THIRTY_MIN = 30 * 60 * 1000;
 
-let bgUrl;
+let img = document.createElement("img");
+
+function setBg(url) {
+    document.body.style.backgroundImage = `url('${url}')`;
+}
 
 if (saved && (now - saved.time < THIRTY_MIN)) {
-    bgUrl = saved.url;
+    setBg(saved.url);
 } else {
-    const theme = themes[Math.floor(Math.random() * themes.length)];
-    bgUrl = `https://source.unsplash.com/1600x900/?${theme}&sig=${Math.random()}`;
+    const query = themes[Math.floor(Math.random() * themes.length)];
+
+    const url = `https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80`;
+
+    // IMPORTANT: fallback stable image first
+    setBg(url);
 
     localStorage.setItem("bg_data", JSON.stringify({
-        url: bgUrl,
+        url: url,
         time: now
     }));
 }
