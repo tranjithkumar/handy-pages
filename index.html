@@ -6,11 +6,12 @@
     body {
         font-family: Arial, sans-serif;
         padding: 40px;
-        background: #f5f5f5;
+        color: white;
 
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
+        background-attachment: fixed;
     }
 
     .header {
@@ -32,7 +33,7 @@
     #quote {
         margin-top: 15px;
         margin-bottom: 30px;
-        color: #555;
+        color: #e5e7eb;
         font-style: italic;
     }
 
@@ -50,19 +51,39 @@
 <body><div class="header">
     <span id="market-status">●</span>
     <span class="welcome">Welcome Back Boss</span>
-</div><p id="quote"></p><button onclick="location.href='screeners/swing.html'">
-    SWING
-</button><button onclick="location.href='screeners/after2pm.html'">
-    AFTER2PM
-</button><script>
-const quotes = [
-    "Protect capital first. Growth comes second.",
-    "The market rewards discipline.",
-    "Patience compounds.",
-    "Strong trends require strong conviction."
-];
+</div>
 
-document.getElementById("quote").innerText =
-    quotes[Math.floor(Math.random() * quotes.length)];
-</script></body>
+<p id="quote"></p>
+
+<button onclick="location.href='screeners/swing.html'">
+    SWING
+</button>
+
+<button onclick="location.href='screeners/after2pm.html'">
+    AFTER2PM
+</button>
+
+<script>
+    const quotes = [
+        "Protect capital first. Growth comes second.",
+        "The market rewards discipline.",
+        "Patience compounds.",
+        "Strong trends require strong conviction."
+    ];
+
+    document.getElementById("quote").innerText =
+        quotes[Math.floor(Math.random() * quotes.length)];
+
+    const backgrounds = [
+        "https://images.unsplash.com/photo-1500375592092-40eb2168fd21",
+        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee",
+        "https://images.unsplash.com/photo-1446776877081-d282a0f896e2",
+        "https://images.unsplash.com/photo-1465447142348-e9952c393450"
+    ];
+
+    document.body.style.backgroundImage =
+        `url(${backgrounds[Math.floor(Math.random() * backgrounds.length)]})`;
+</script>
+
+</body>
 </html>
