@@ -12,14 +12,12 @@
         padding: 40px;
         color: white;
 
-        /* background image system */
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
         background-attachment: fixed;
     }
 
-    /* dark overlay for readability */
     body::before {
         content: "";
         position: fixed;
@@ -51,6 +49,7 @@
         margin-bottom: 30px;
         color: #e5e7eb;
         font-style: italic;
+        min-height: 20px;
     }
 
     button {
@@ -82,18 +81,13 @@
 
 <p id="quote">Loading quote...</p>
 
-<button onclick="location.href='screeners/swing.html'">
-    SWING
-</button>
-
-<button onclick="location.href='screeners/after2pm.html'">
-    AFTER2PM
-</button>
+<button onclick="location.href='screeners/swing.html'">SWING</button>
+<button onclick="location.href='screeners/after2pm.html'">AFTER2PM</button>
 
 <script>
 
 /* =========================
-   MARKET STATUS (IST)
+   MARKET STATUS
    ========================= */
 
 function isMarketOpen() {
@@ -132,7 +126,7 @@ setInterval(updateMarketStatus, 60000);
 
 
 /* =========================
-   BACKGROUND IMAGES (FIXED)
+   BACKGROUND IMAGE (SAFE)
    ========================= */
 
 const themes = [
@@ -145,48 +139,53 @@ const themes = [
   "technology data system digital"
 ];
 
-const saved = JSON.parse(localStorage.getItem("bg_data"));
-const now = Date.now();
-const THIRTY_MIN = 30 * 60 * 1000;
-
-let img = document.createElement("img");
-
 function setBg(url) {
     document.body.style.backgroundImage = `url('${url}')`;
 }
+
+const saved = JSON.parse(localStorage.getItem("bg_data") || "null");
+const now = Date.now();
+const THIRTY_MIN = 30 * 60 * 1000;
 
 if (saved && (now - saved.time < THIRTY_MIN)) {
     setBg(saved.url);
 } else {
     const query = themes[Math.floor(Math.random() * themes.length)];
 
-    const url = `https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80`;
+    const url = `https://source.unsplash.com/1600x900/?${encodeURIComponent(query)}`;
 
-    // IMPORTANT: fallback stable image first
     setBg(url);
 
     localStorage.setItem("bg_data", JSON.stringify({
-        url: url,
+        url,
         time: now
     }));
 }
 
-document.body.style.backgroundImage = `url(${bgUrl})`;
-
 
 /* =========================
-   RANDOM QUOTE
+   QUOTE (FAIL SAFE)
    ========================= */
 
-fetch("https://api.quotable.io/random")
-    .then(res => res.json())
-    .then(data => {
-        document.getElementById("quote").innerText = data.content;
-    })
-    .catch(() => {
-        document.getElementById("quote").innerText =
-            "Discipline beats prediction.";
-    });
+const quoteEl = document.getElementById("quote");
+
+const controller = new AbortController();
+const timeout = setTimeout(() => controller.abort(), 5000);
+
+fetch("https://api.quotable.io/random", {
+    signal: controller.signal
+})
+.then(res => {
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error("HTTP error");
+    return res.json();
+})
+.then(data => {
+    quoteEl.innerText = data.content;
+})
+.catch(() => {
+    quoteEl.innerText = "Discipline beats prediction.";
+});
 
 </script>
 
