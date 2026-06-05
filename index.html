@@ -1,9 +1,13 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Handy Pages</title><style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Handy Pages</title>
+
+<style>
     body {
+        margin: 0;
         font-family: Arial, sans-serif;
         padding: 40px;
         color: white;
@@ -14,47 +18,65 @@
         background-attachment: fixed;
     }
 
+    /* readability layer */
+    body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.45);
+        z-index: -1;
+    }
+
     .header {
         display: flex;
         align-items: center;
         gap: 10px;
+        position: relative;
+        z-index: 2;
     }
 
     #market-status {
-        color: #22c55e;
         font-size: 22px;
     }
 
     .welcome {
         font-size: 20px;
         font-weight: bold;
-        color: #ffffff;
     }
 
     #quote {
         margin-top: 15px;
         margin-bottom: 30px;
-        color: #d1d5db;
+        color: #e5e7eb;
         font-style: italic;
+        position: relative;
+        z-index: 2;
     }
 
     button {
-        width: 120px;
-        height: 20px;
-        font-size: 10px;
+        width: 140px;
+        height: 40px;
+        font-size: 13px;
         cursor: pointer;
         display: block;
         margin-bottom: 15px;
+        position: relative;
+        z-index: 2;
     }
 </style>
-
 </head>
-<body><div class="header">
-    <span id="market-status">●</span>
+
+<body>
+
+<div class="header">
+    <span id="market-status">⚪</span>
     <span class="welcome">Welcome Back Boss</span>
 </div>
 
-<p id="quote"></p>
+<p id="quote">Loading quote...</p>
 
 <button onclick="location.href='screeners/swing.html'">
     SWING
@@ -65,25 +87,96 @@
 </button>
 
 <script>
-    const quotes = [
-        "Protect capital first. Growth comes second.",
-        "The market rewards discipline.",
-        "Patience compounds.",
-        "Strong trends require strong conviction."
-    ];
 
-    document.getElementById("quote").innerText =
-        quotes[Math.floor(Math.random() * quotes.length)];
+/* =========================
+   MARKET STATUS (IST LOGIC)
+   ========================= */
 
-    const backgrounds = [
-        "https://images.unsplash.com/photo-1500375592092-40eb2168fd21",
-        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee",
-        "https://images.unsplash.com/photo-1446776877081-d282a0f896e2",
-        "https://images.unsplash.com/photo-1465447142348-e9952c393450"
-    ];
+function isMarketOpen() {
+    const now = new Date();
 
-    document.body.style.backgroundImage =
-        `url(${backgrounds[Math.floor(Math.random() * backgrounds.length)]})`;
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (5.5 * 60 * 60 * 1000));
+
+    const day = ist.getDay();
+    const hour = ist.getHours();
+    const min = ist.getMinutes();
+
+    // weekend closed
+    if (day === 0 || day === 6) return false;
+
+    const current = hour * 60 + min;
+    const open = 9 * 60 + 15;
+    const close = 15 * 60 + 30;
+
+    return current >= open && current <= close;
+}
+
+function updateMarketStatus() {
+    const el = document.getElementById("market-status");
+
+    if (isMarketOpen()) {
+        el.textContent = "🟢";
+        el.style.color = "#22c55e";
+    } else {
+        el.textContent = "⚪";
+        el.style.color = "#9ca3af";
+    }
+}
+
+updateMarketStatus();
+setInterval(updateMarketStatus, 60000);
+
+
+/* =========================
+   BACKGROUND ROTATION (30 MIN)
+   ========================= */
+
+const themes = [
+    "finance,stock market,trading,charts,candlestick",
+    "ship,ocean,sea,navigation,compass,voyage,horizon",
+    "mountains,landscape,forest,river,sunrise",
+    "sky,clouds,sunset,aerial,altitude",
+    "space,galaxy,stars,universe,nebula",
+    "city,skyline,skyscraper,night city,lights",
+    "technology,data,network,digital,system"
+];
+
+const saved = JSON.parse(localStorage.getItem("bg_data"));
+const now = Date.now();
+const THIRTY_MIN = 30 * 60 * 1000;
+
+let bgUrl;
+
+if (saved && (now - saved.time < THIRTY_MIN)) {
+    bgUrl = saved.url;
+} else {
+    const theme = themes[Math.floor(Math.random() * themes.length)];
+    bgUrl = `https://source.unsplash.com/1600x900/?${theme}&sig=${Math.random()}`;
+
+    localStorage.setItem("bg_data", JSON.stringify({
+        url: bgUrl,
+        time: now
+    }));
+}
+
+document.body.style.backgroundImage = `url(${bgUrl})`;
+
+
+/* =========================
+   RANDOM QUOTE (INFINITE)
+   ========================= */
+
+fetch("https://api.quotable.io/random")
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("quote").innerText = data.content;
+    })
+    .catch(() => {
+        document.getElementById("quote").innerText =
+            "Discipline beats prediction.";
+    });
+
 </script>
 
 </body>
