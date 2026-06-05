@@ -1,37 +1,58 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Handy Pages</title>
+    <title>Handy Pages</title><style>
+    body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        margin-top: 80px;
+    }
 
-    <style>
-        #market-status {
-            color: #22c55e;
-            font-size: 24px;
-            margin: 5px 0;
-        }
-    </style>
+    #market-status {
+        color: #22c55e;
+        font-size: 24px;
+        margin-right: 8px;
+    }
+
+    .welcome {
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    .quote {
+        margin-top: 20px;
+        margin-bottom: 40px;
+        color: #555;
+    }
+
+    button {
+        width: 180px;
+        height: 45px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+</style>
+
 </head>
-<body>
+<body><div>
+    <span id="market-status">●</span>
+    <span class="welcome">Welcome Back Boss</span>
+</div>
 
-    <h4>Welcome Back Boss 👋</h4>
+<p class="quote">
+    Protect capital first. Growth comes second.
+</p>
 
-    <p id="market-status">●</p>
+<button onclick="location.href='screeners/swing.html'">
+    SWING
+</button>
 
-    <p id="quote">
-        Protect capital first. Growth comes second.
-    </p>
+<br><br>
 
-    <button onclick="location.href='screeners/swing.html'">
-        SWING
-    </button>
-
-    <br><br>
-
-    <button onclick="location.href='screeners/after2pm.html'">
-        AFTER2PM
-    </button>
+<button onclick="location.href='screeners/after2pm.html'">
+    AFTER2PM
+</button>
 
 </body>
 </html>
