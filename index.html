@@ -150,39 +150,69 @@ setBg(bgUrl);
 
 
 /* =========================
-   QUOTE (HOURLY ROTATION FIX)
+   LIVE QUOTES (ENDLESS + FAILSAFE)
    ========================= */
 
 const quoteEl = document.getElementById("quote");
 
-const quotes = [
+const fallbackQuotes = [
     "Discipline beats prediction",
     "Execution beats intention",
     "Consistency compounds everything",
     "Risk management is survival",
     "Focus on process, not outcome",
-    "Small edges build big results",
     "Control downside, upside takes care of itself"
 ];
 
-function getHourSeed() {
-    const now = new Date();
-    return now.getFullYear() * 10000 +
-           now.getMonth() * 100 +
-           now.getDate() * 24 +
-           now.getHours();
+let lastQuote = "";
+
+async function fetchLiveQuote() {
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        const res = await fetch("https://api.quotable.io/random", {
+            signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        if (!res.ok) throw new Error("Bad response");
+
+        const data = await res.json();
+        return data.content;
+
+    } catch (e) {
+        return null;
+    }
 }
 
-function loadQuote() {
-    const seed = getHourSeed();
-    const index = seed % quotes.length;
-    quoteEl.innerText = quotes[index];
+function pickFallback() {
+    return fallbackQuotes[
+        Math.floor(Math.random() * fallbackQuotes.length)
+    ];
 }
 
-loadQuote();
+function setQuote(text) {
+    if (!text) text = pickFallback();
 
-/* update every hour exactly */
-setInterval(loadQuote, 60 * 60 * 1000);
+    // prevent immediate repetition
+    if (text === lastQuote) return;
+
+    lastQuote = text;
+    quoteEl.innerText = text;
+}
+
+async function updateQuote() {
+    const live = await fetchLiveQuote();
+    setQuote(live || pickFallback());
+}
+
+/* initial load */
+updateQuote();
+
+/* endless rotation every 60 seconds */
+setInterval(updateQuote, 60 * 1000);
 
 </script>
 
