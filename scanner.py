@@ -54,11 +54,21 @@ def get_data(ticker):
 # ---------------- MARKET REGIME ----------------
 def market_return():
     df = get_data(INDEX)
-    if df is None:
-        return 0
+    if df is None or df.empty:
+        return 0.0
 
-    close = df["Close"]
-    return float((close.iloc[-1] / close.iloc[-20] - 1) * 100)
+    close_series = df["Close"]
+
+    # HARD SAFETY: convert to 1D array
+    close_series = pd.Series(close_series.values.flatten())
+
+    if len(close_series) < 20:
+        return 0.0
+
+    last = float(close_series.iloc[-1])
+    prev = float(close_series.iloc[-20])
+
+    return float((last / prev - 1) * 100)
 
 # ---------------- ANALYSIS CORE ----------------
 def analyze(ticker, mkt_ret):
