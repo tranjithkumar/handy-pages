@@ -6,186 +6,225 @@
 <title>Handy Pages</title>
 
 <style>
-    body {
-        margin: 0;
-        font-family: Arial, sans-serif;
-        padding: 40px;
-        color: white;
+body {
+    margin: 0;
+    padding: 40px;
+    font-family: Arial, sans-serif;
+    color: white;
 
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
 
-        background-color: #0f172a;
-    }
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: -1;
+}
 
-    body::before {
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.45);
-        z-index: -1;
-    }
+.header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
 
-    .header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
+#market-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #9ca3af;
+    display: inline-block;
+}
 
-    #market-status {
-        font-size: 10px;
-    }
+.welcome {
+    font-size: 22px;
+    font-weight: bold;
+}
 
-    .welcome {
-        font-size: 18px;
-        font-weight: bold;
-    }
+#quote {
+    margin-top: 15px;
+    margin-bottom: 30px;
+    color: #e5e7eb;
+    font-style: italic;
+    max-width: 500px;
+}
 
-    #quote {
-        margin-top: 15px;
-        margin-bottom: 30px;
-        color: #e5e7eb;
-        font-style: italic;
-        min-height: 20px;
-    }
+button {
+    width: 140px;
+    height: 42px;
+    margin-bottom: 12px;
+    cursor: pointer;
 
-    button {
-        width: 140px;
-        height: 40px;
-        font-size: 13px;
-        cursor: pointer;
-        display: block;
-        margin-bottom: 12px;
+    color: white;
+    background: rgba(30,41,59,0.75);
 
-        background: rgba(30,41,59,0.6);
-        color: white;
-        border: 1px solid #334155;
-        border-radius: 6px;
-    }
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
 
-    button:hover {
-        background: rgba(51,65,85,0.8);
-    }
+    font-weight: bold;
+}
+
+button:hover {
+    background: rgba(51,65,85,0.9);
+}
 </style>
 </head>
-
 <body>
 
 <div class="header">
-    <span id="market-status">⚪</span>
+    <span id="market-status"></span>
     <span class="welcome">Welcome Back Boss</span>
 </div>
 
-<p id="quote">Loading quote...</p>
+<p id="quote"></p>
 
-<button onclick="location.href='screeners/swing.html'">SWING</button>
-<button onclick="location.href='screeners/after2pm.html'">AFTER2PM</button>
+<button onclick="location.href='screeners/swing.html'">
+    SWING
+</button>
+
+<button onclick="location.href='screeners/after2pm.html'">
+    AFTER2PM
+</button>
 
 <script>
 
-/* =========================
+/* -------------------------
    MARKET STATUS
-   ========================= */
+------------------------- */
 
 function isMarketOpen() {
+
     const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const ist = new Date(utc + (5.5 * 60 * 60 * 1000));
+
+    const utc =
+        now.getTime() +
+        now.getTimezoneOffset() * 60000;
+
+    const ist =
+        new Date(utc + 19800000);
 
     const day = ist.getDay();
-    const hour = ist.getHours();
-    const min = ist.getMinutes();
 
-    if (day === 0 || day === 6) return false;
+    if (day === 0 || day === 6)
+        return false;
 
-    const current = hour * 60 + min;
+    const current =
+        ist.getHours() * 60 +
+        ist.getMinutes();
+
     const open = 9 * 60 + 15;
     const close = 15 * 60 + 30;
 
-    return current >= open && current <= close;
+    return current >= open &&
+           current <= close;
 }
 
 function updateMarketStatus() {
-    const el = document.getElementById("market-status");
 
-    if (isMarketOpen()) {
-        el.textContent = "🟢";
-        el.style.color = "#22c55e";
-    } else {
-        el.textContent = "⚪";
-        el.style.color = "#9ca3af";
-    }
+    const dot =
+        document.getElementById(
+            "market-status"
+        );
+
+    dot.style.background =
+        isMarketOpen()
+            ? "#22c55e"
+            : "#9ca3af";
 }
 
 updateMarketStatus();
 setInterval(updateMarketStatus, 60000);
 
 
-/* =========================
-   BACKGROUND (STABLE OFFLINE-SAFE)
-   ========================= */
-
-function setBg(url) {
-    const img = new Image();
-
-    img.onload = () => {
-        document.body.style.backgroundImage = `url('${url}')`;
-    };
-
-    img.onerror = () => {
-        document.body.style.backgroundImage = "none";
-        document.body.style.backgroundColor = "#0f172a";
-    };
-
-    img.src = url;
-}
-
-const bgUrl = "https://picsum.photos/1920/1080?random=" + Date.now();
-setBg(bgUrl);
-
-
-/* =========================
-   QUOTES (OFFLINE SAFE - NO API)
-   ========================= */
-
-const quoteEl = document.getElementById("quote");
+/* -------------------------
+   QUOTES
+------------------------- */
 
 const quotes = [
-    "Discipline beats prediction",
-    "Execution beats intention",
-    "Consistency compounds everything",
-    "Risk management is survival",
-    "Focus on process, not outcome",
-    "Control downside, upside takes care of itself",
-    "Small edges build big results",
-    "Avoid emotional execution",
-    "Survival first, profits later",
-    "Process over outcome"
+    "Protect capital first. Growth comes second.",
+    "Risk management is survival.",
+    "The market rewards discipline.",
+    "Patience compounds.",
+    "Process over prediction.",
+    "Cash is a position.",
+    "Strong trends require strong conviction.",
+    "Consistency beats intensity.",
+    "Cut losses. Let winners work.",
+    "Focus on risk before reward.",
+    "A good system beats a good guess.",
+    "Trade what is happening, not what should happen.",
+    "Small losses are business expenses.",
+    "Survival creates opportunity.",
+    "The trend is your ally."
 ];
 
-let lastIndex = -1;
+document.getElementById("quote").innerText =
+    quotes[
+        Math.floor(
+            Math.random() * quotes.length
+        )
+    ];
 
-function loadQuote() {
-    let index;
 
-    do {
-        index = Math.floor(Math.random() * quotes.length);
-    } while (index === lastIndex && quotes.length > 1);
+/* -------------------------
+   BACKGROUND
+------------------------- */
 
-    lastIndex = index;
-    quoteEl.innerText = quotes[index];
+const backgrounds = [
+
+"https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1600&q=80",
+
+"https://images.unsplash.com/photo-1446776877081-d282a0f896e2?auto=format&fit=crop&w=1600&q=80",
+
+"https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80",
+
+"https://images.unsplash.com/photo-1465447142348-e9952c393450?auto=format&fit=crop&w=1600&q=80",
+
+"https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1600&q=80",
+
+"https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1600&q=80"
+];
+
+const saved =
+    JSON.parse(
+        localStorage.getItem("bg_data")
+    );
+
+const now = Date.now();
+const THIRTY_MIN = 30 * 60 * 1000;
+
+let bg;
+
+if (
+    saved &&
+    (now - saved.time < THIRTY_MIN)
+) {
+    bg = saved.url;
+} else {
+
+    bg =
+        backgrounds[
+            Math.floor(
+                Math.random() *
+                backgrounds.length
+            )
+        ];
+
+    localStorage.setItem(
+        "bg_data",
+        JSON.stringify({
+            url: bg,
+            time: now
+        })
+    );
 }
 
-/* initial */
-loadQuote();
-
-/* change every hour */
-setInterval(loadQuote, 60 * 60 * 1000);
+document.body.style.backgroundImage =
+    `url('${bg}')`;
 
 </script>
 
