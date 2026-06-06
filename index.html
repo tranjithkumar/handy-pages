@@ -3,76 +3,70 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Handy Pages</title>
+<title>RK Pages</title>
 
 <style>
-body {
-    margin: 0;
-    padding: 40px;
-    font-family: Arial, sans-serif;
-    color: white;
-
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
+body{
+    margin:0;
+    padding:40px;
+    font-family:Arial,sans-serif;
+    color:white;
+    background-size:cover;
+    background-position:center;
+    background-repeat:no-repeat;
+    background-attachment:fixed;
 }
 
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.55);
-    z-index: -1;
+body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.45);
+    z-index:-1;
 }
 
-.header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.header{
+    display:flex;
+    align-items:center;
+    gap:10px;
 }
 
-#market-status {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #9ca3af;
-    display: inline-block;
+#market-status{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:#9ca3af;
+    display:inline-block;
 }
 
-.welcome {
-    font-size: 22px;
-    font-weight: bold;
+.welcome{
+    font-size:22px;
+    font-weight:bold;
 }
 
-#quote {
-    margin-top: 15px;
-    margin-bottom: 30px;
-    color: #e5e7eb;
-    font-style: italic;
-    max-width: 500px;
+#quote{
+    margin-top:15px;
+    margin-bottom:30px;
+    color:#f1f5f9;
+    font-style:italic;
+    max-width:600px;
 }
 
-button {
-    width: 140px;
-    height: 42px;
-    margin-bottom: 12px;
-    cursor: pointer;
-
-    color: white;
-    background: rgba(30,41,59,0.75);
-
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 6px;
-
-    font-weight: bold;
-}
-
-button:hover {
-    background: rgba(51,65,85,0.9);
+button{
+    width:140px;
+    height:42px;
+    display:block;
+    margin-bottom:15px;
+    cursor:pointer;
+    border:none;
+    border-radius:6px;
+    background:rgba(15,23,42,.8);
+    color:white;
+    font-weight:bold;
 }
 </style>
 </head>
+
 <body>
 
 <div class="header">
@@ -83,47 +77,46 @@ button:hover {
 <p id="quote"></p>
 
 <button onclick="location.href='screeners/swing.html'">
-    SWING
+SWING
 </button>
 
 <button onclick="location.href='screeners/after2pm.html'">
-    AFTER2PM
+AFTER2PM
 </button>
 
 <script>
 
-/* -------------------------
-   MARKET STATUS
-------------------------- */
+/* MARKET STATUS */
 
-function isMarketOpen() {
+function isMarketOpen(){
 
     const now = new Date();
 
     const utc =
         now.getTime() +
-        now.getTimezoneOffset() * 60000;
+        now.getTimezoneOffset()*60000;
 
     const ist =
         new Date(utc + 19800000);
 
     const day = ist.getDay();
 
-    if (day === 0 || day === 6)
+    if(day === 0 || day === 6){
         return false;
+    }
 
     const current =
-        ist.getHours() * 60 +
+        ist.getHours()*60 +
         ist.getMinutes();
 
-    const open = 9 * 60 + 15;
-    const close = 15 * 60 + 30;
+    const open = 9*60 + 15;
+    const close = 15*60 + 30;
 
     return current >= open &&
            current <= close;
 }
 
-function updateMarketStatus() {
+function updateMarketStatus(){
 
     const dot =
         document.getElementById(
@@ -137,94 +130,78 @@ function updateMarketStatus() {
 }
 
 updateMarketStatus();
-setInterval(updateMarketStatus, 60000);
+setInterval(updateMarketStatus,60000);
 
 
-/* -------------------------
-   QUOTES
-------------------------- */
+/* QUOTES */
 
 const quotes = [
-    "Protect capital first. Growth comes second.",
-    "Risk management is survival.",
-    "The market rewards discipline.",
-    "Patience compounds.",
-    "Process over prediction.",
-    "Cash is a position.",
-    "Strong trends require strong conviction.",
-    "Consistency beats intensity.",
-    "Cut losses. Let winners work.",
-    "Focus on risk before reward.",
-    "A good system beats a good guess.",
-    "Trade what is happening, not what should happen.",
-    "Small losses are business expenses.",
-    "Survival creates opportunity.",
-    "The trend is your ally."
+
+"Protect capital first. Growth comes second.",
+"Risk management is survival.",
+"The market rewards discipline.",
+"Patience compounds.",
+"Process over prediction.",
+"Cash is a position.",
+"Strong trends require strong conviction.",
+"Consistency beats intensity.",
+"Cut losses. Let winners work.",
+"Focus on risk before reward.",
+"A good system beats a good guess.",
+"Trade what is happening, not what should happen.",
+"Small losses are business expenses.",
+"Survival creates opportunity.",
+"The trend is your ally.",
+"Price pays. Opinions don't.",
+"Risk first. Return second.",
+"Winners run. Losers exit.",
+"Protect downside aggressively.",
+"Discipline compounds faster than excitement."
 ];
 
-document.getElementById("quote").innerText =
-    quotes[
+const usedQuotes =
+    JSON.parse(
+        localStorage.getItem("usedQuotes")
+    ) || [];
+
+let availableQuotes =
+    quotes.filter(
+        q => !usedQuotes.includes(q)
+    );
+
+if(availableQuotes.length === 0){
+    localStorage.removeItem("usedQuotes");
+    availableQuotes = [...quotes];
+}
+
+const selectedQuote =
+    availableQuotes[
         Math.floor(
-            Math.random() * quotes.length
+            Math.random()*availableQuotes.length
         )
     ];
 
+document.getElementById("quote")
+    .innerText = selectedQuote;
 
-/* -------------------------
-   BACKGROUND
-------------------------- */
+usedQuotes.push(selectedQuote);
 
-const backgrounds = [
+localStorage.setItem(
+    "usedQuotes",
+    JSON.stringify(usedQuotes)
+);
 
-"https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1600&q=80",
 
-"https://images.unsplash.com/photo-1446776877081-d282a0f896e2?auto=format&fit=crop&w=1600&q=80",
+/* BACKGROUND */
 
-"https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80",
-
-"https://images.unsplash.com/photo-1465447142348-e9952c393450?auto=format&fit=crop&w=1600&q=80",
-
-"https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1600&q=80",
-
-"https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1600&q=80"
-];
-
-const saved =
-    JSON.parse(
-        localStorage.getItem("bg_data")
+const period =
+    Math.floor(
+        Date.now() /
+        (1*60*1000)
     );
-
-const now = Date.now();
-const THIRTY_MIN = 30 * 60 * 1000;
-
-let bg;
-
-if (
-    saved &&
-    (now - saved.time < THIRTY_MIN)
-) {
-    bg = saved.url;
-} else {
-
-    bg =
-        backgrounds[
-            Math.floor(
-                Math.random() *
-                backgrounds.length
-            )
-        ];
-
-    localStorage.setItem(
-        "bg_data",
-        JSON.stringify({
-            url: bg,
-            time: now
-        })
-    );
-}
 
 document.body.style.backgroundImage =
-    `url('${bg}')`;
+`url("https://picsum.photos/1600/900?random=${period}")`;
 
 </script>
 
