@@ -1,18 +1,1 @@
-[
-  {
-    "symbol": "RELIANCE",
-    "close": 3125,
-    "monthly_change": 8.4,
-    "rsi": 66,
-    "high_gap": 7.2,
-    "strike": "3150 CE"
-  },
-  {
-    "symbol": "SBIN",
-    "close": 845,
-    "monthly_change": 6.8,
-    "rsi": 63,
-    "high_gap": 11.5,
-    "strike": "850 CE"
-  }
-]
+[]
