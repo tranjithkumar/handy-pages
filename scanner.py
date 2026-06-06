@@ -2,10 +2,11 @@ import yfinance as yf
 import pandas as pd
 import requests
 import numpy as np
+import os
 
-# ---------------- CONFIG ----------------
-TELEGRAM_TOKEN = "YOUR_BOT_TOKEN"
-CHAT_ID = "YOUR_CHAT_ID"
+# ---------------- CONFIG (ENV SAFE) ----------------
+TELEGRAM_TOKEN = os.environ.get("BOT_TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
 INDEX = "^NSEI"
 
@@ -16,6 +17,10 @@ TICKERS = [
     "TATAMOTORS.NS", "BHARTIARTL.NS", "ITC.NS"
 ]
 
+# ---------------- SAFETY CHECK ----------------
+if not TELEGRAM_TOKEN or not CHAT_ID:
+    raise ValueError("Missing BOT_TOKEN or CHAT_ID in environment variables")
+
 # ---------------- TELEGRAM ----------------
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -24,19 +29,11 @@ def send_telegram(msg):
     except Exception as e:
         print("Telegram error:", e)
 
-# ---------------- INDICATORS ----------------
-def rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.clip(lower=0).rolling(period).mean()
-    loss = (-delta.clip(upper=0)).rolling(period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
-
+# ---------------- DATA ----------------
 def get_data(ticker):
     try:
         df = yf.download(ticker, period="6mo", interval="1d", progress=False)
 
-        # HARD GUARDS
         if df is None or df.empty:
             return None
 
@@ -51,26 +48,28 @@ def get_data(ticker):
     except Exception:
         return None
 
-# ---------------- MARKET REGIME ----------------
+# ---------------- RSI ----------------
+def rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0).rolling(period).mean()
+    loss = (-delta.clip(upper=0)).rolling(period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+# ---------------- MARKET RETURN ----------------
 def market_return():
     df = get_data(INDEX)
-    if df is None or df.empty:
+    if df is None:
         return 0.0
 
-    close_series = df["Close"]
+    close = pd.Series(df["Close"].values.flatten())
 
-    # HARD SAFETY: convert to 1D array
-    close_series = pd.Series(close_series.values.flatten())
-
-    if len(close_series) < 20:
+    if len(close) < 20:
         return 0.0
 
-    last = float(close_series.iloc[-1])
-    prev = float(close_series.iloc[-20])
+    return float((close.iloc[-1] / close.iloc[-20] - 1) * 100)
 
-    return float((last / prev - 1) * 100)
-
-# ---------------- ANALYSIS CORE ----------------
+# ---------------- ANALYZE ----------------
 def analyze(ticker, mkt_ret):
     df = get_data(ticker)
     if df is None:
@@ -80,7 +79,7 @@ def analyze(ticker, mkt_ret):
     df["EMA50"] = df["Close"].ewm(span=50).mean()
     df["RSI"] = rsi(df["Close"])
 
-    # FORCE SCALARS (CRITICAL FIX)
+    # FORCE SCALARS
     close = float(df["Close"].iloc[-1])
     ema20 = float(df["EMA20"].iloc[-1])
     ema50 = float(df["EMA50"].iloc[-1])
@@ -89,7 +88,6 @@ def analyze(ticker, mkt_ret):
     stock_ret = float((df["Close"].iloc[-1] / df["Close"].iloc[-20] - 1) * 100)
     rel_strength = float(stock_ret - mkt_ret)
 
-    # SCORE ENGINE
     score = 0
 
     # trend
@@ -106,7 +104,7 @@ def analyze(ticker, mkt_ret):
     score += 3 if rel_strength > 0 else 0
     score += 2 if rel_strength > 5 else 0
 
-    # signal logic
+    # signal engine
     if score >= 8:
         signal = "STRONG BUY"
     elif score >= 6:
@@ -126,6 +124,8 @@ def analyze(ticker, mkt_ret):
 def run():
     mkt_ret = market_return()
 
+    relax_market = mkt_ret < 0
+
     results = []
 
     for t in TICKERS:
@@ -143,9 +143,14 @@ def run():
         return
 
     df = pd.DataFrame(results)
+
+    # adaptive adjustment
+    if relax_market:
+        df["score"] = df["score"] - 1
+
     df = df.sort_values("score", ascending=False)
 
-    actionable = df[df["signal"] != "IGNORE"].head(5)
+    actionable = df[df["score"] >= 5].head(5)
 
     if actionable.empty:
         msg = "Scanner: No actionable setups this week."
