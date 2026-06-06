@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "symbol": "RELIANCE",
+    "setup": "Breakout",
+    "close": 3125,
+    "strike": "3150 CE"
+  },
+  {
+    "symbol": "SBIN",
+    "setup": "Pullback",
+    "close": 845,
+    "strike": "850 CE"
+  }
+]
