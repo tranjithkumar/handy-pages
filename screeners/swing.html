@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SWING Scanner</title>
+<title>SWING</title>
 
 <style>
 body {
@@ -14,7 +14,12 @@ body {
 }
 
 h2 {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
+}
+
+.status {
+    margin-bottom: 15px;
+    color: #9ca3af;
 }
 
 table {
@@ -36,24 +41,19 @@ tr:nth-child(even) {
     background: #1a2332;
 }
 
-.back-btn {
+button {
     margin-top: 20px;
     padding: 10px 15px;
     cursor: pointer;
-}
-
-.status {
-    margin-bottom: 15px;
-    color: #9ca3af;
 }
 </style>
 </head>
 
 <body>
 
-<h2>SWING Scanner</h2>
+<h2>SWING</h2>
 
-<div class="status" id="status">
+<div id="status" class="status">
 Loading...
 </div>
 
@@ -61,21 +61,22 @@ Loading...
 <thead>
 <tr>
     <th>Symbol</th>
-    <th>Setup</th>
     <th>Close</th>
-    <th>OTM Strike</th>
+    <th>1M %</th>
+    <th>RSI</th>
+    <th>52W Gap %</th>
+    <th>OTM CE</th>
 </tr>
 </thead>
 
 <tbody id="results">
 <tr>
-    <td colspan="4">Loading...</td>
+    <td colspan="6">Loading...</td>
 </tr>
 </tbody>
 </table>
 
-<button class="back-btn"
-onclick="location.href='../index.html'">
+<button onclick="location.href='../index.html'">
 Back
 </button>
 
@@ -85,11 +86,14 @@ fetch("../data/swing.json")
 .then(response => response.json())
 .then(data => {
 
-    document.getElementById("status").innerText =
-        `${data.length} candidate(s) found`;
+    const status =
+        document.getElementById("status");
 
     const tbody =
         document.getElementById("results");
+
+    status.innerText =
+        `${data.length} candidate(s) found`;
 
     tbody.innerHTML = "";
 
@@ -97,7 +101,9 @@ fetch("../data/swing.json")
 
         tbody.innerHTML = `
         <tr>
-            <td colspan="4">No candidates found</td>
+            <td colspan="6">
+                No candidates found
+            </td>
         </tr>`;
 
         return;
@@ -108,8 +114,10 @@ fetch("../data/swing.json")
         tbody.innerHTML += `
         <tr>
             <td>${stock.symbol}</td>
-            <td>${stock.setup}</td>
             <td>${stock.close}</td>
+            <td>${stock.monthly_change}%</td>
+            <td>${stock.rsi}</td>
+            <td>${stock.high_gap}%</td>
             <td>${stock.strike}</td>
         </tr>`;
     });
@@ -117,10 +125,12 @@ fetch("../data/swing.json")
 })
 .catch(error => {
 
-    document.getElementById("status").innerText =
+    document.getElementById("status")
+        .innerText =
         "Failed to load swing.json";
 
     console.error(error);
+
 });
 
 </script>
