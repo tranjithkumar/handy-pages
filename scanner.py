@@ -4,7 +4,7 @@ import requests
 import numpy as np
 import os
 
-# ---------------- CONFIG (ENV SAFE) ----------------
+# ---------------- CONFIG ----------------
 TELEGRAM_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
@@ -17,9 +17,8 @@ TICKERS = [
     "TATAMOTORS.NS", "BHARTIARTL.NS", "ITC.NS"
 ]
 
-# ---------------- SAFETY CHECK ----------------
 if not TELEGRAM_TOKEN or not CHAT_ID:
-    raise ValueError("Missing BOT_TOKEN or CHAT_ID in environment variables")
+    raise ValueError("Missing BOT_TOKEN or CHAT_ID")
 
 # ---------------- TELEGRAM ----------------
 def send_telegram(msg):
@@ -79,7 +78,6 @@ def analyze(ticker, mkt_ret):
     df["EMA50"] = df["Close"].ewm(span=50).mean()
     df["RSI"] = rsi(df["Close"])
 
-    # FORCE SCALARS
     close = float(df["Close"].iloc[-1])
     ema20 = float(df["EMA20"].iloc[-1])
     ema50 = float(df["EMA50"].iloc[-1])
@@ -104,10 +102,10 @@ def analyze(ticker, mkt_ret):
     score += 3 if rel_strength > 0 else 0
     score += 2 if rel_strength > 5 else 0
 
-    # signal engine
-    if score >= 8:
+    # ---------------- UPDATED SIGNAL THRESHOLDS ----------------
+    if score >= 7:
         signal = "STRONG BUY"
-    elif score >= 6:
+    elif score >= 5:
         signal = "WATCH"
     else:
         signal = "IGNORE"
@@ -123,7 +121,6 @@ def analyze(ticker, mkt_ret):
 # ---------------- MAIN ----------------
 def run():
     mkt_ret = market_return()
-
     relax_market = mkt_ret < 0
 
     results = []
