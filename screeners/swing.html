@@ -82,58 +82,60 @@ Back
 
 <script>
 
-fetch("../data/swing.json")
-.then(response => response.json())
-.then(data => {
+async function loadSwing() {
 
-    const status =
-        document.getElementById("status");
+    try {
 
-    const tbody =
-        document.getElementById("results");
+        const url = "../data/swing.json?v=" + Date.now(); // 🔥 CACHE FIX
 
-    status.innerText =
-        `${data.length} candidate(s) found`;
+        const response = await fetch(url);
 
-    tbody.innerHTML = "";
+        if (!response.ok) {
+            throw new Error("HTTP Error " + response.status);
+        }
 
-    if (data.length === 0) {
+        const data = await response.json();
 
-        tbody.innerHTML = `
-        <tr>
-            <td colspan="6">
-                No candidates found
-            </td>
-        </tr>`;
+        const status = document.getElementById("status");
+        const tbody = document.getElementById("results");
 
-        return;
+        status.innerText = `${data.length} candidate(s) found`;
+
+        tbody.innerHTML = "";
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = `
+            <tr>
+                <td colspan="6">No candidates found</td>
+            </tr>`;
+            return;
+        }
+
+        data.forEach(stock => {
+            tbody.innerHTML += `
+            <tr>
+                <td>${stock.symbol}</td>
+                <td>${stock.close}</td>
+                <td>${stock.monthly_change}%</td>
+                <td>${stock.rsi}</td>
+                <td>${stock.high_gap}%</td>
+                <td>${stock.strike}</td>
+            </tr>`;
+        });
+
+    } catch (error) {
+
+        document.getElementById("status").innerText =
+            "Failed to load swing.json";
+
+        console.error(error);
     }
+}
 
-    data.forEach(stock => {
-
-        tbody.innerHTML += `
-        <tr>
-            <td>${stock.symbol}</td>
-            <td>${stock.close}</td>
-            <td>${stock.monthly_change}%</td>
-            <td>${stock.rsi}</td>
-            <td>${stock.high_gap}%</td>
-            <td>${stock.strike}</td>
-        </tr>`;
-    });
-
-})
-.catch(error => {
-
-    document.getElementById("status")
-        .innerText =
-        "Failed to load swing.json";
-
-    console.error(error);
-
-});
+// initial load
+loadSwing();
 
 </script>
 
 </body>
-</html>
+    </html>
