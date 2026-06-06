@@ -1,2 +1,129 @@
-<h1>SWING</h1>
-<p>Under Development</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWING Scanner</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background: #111827;
+    color: white;
+}
+
+h2 {
+    margin-bottom: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    border: 1px solid #374151;
+    padding: 10px;
+    text-align: left;
+}
+
+th {
+    background: #1f2937;
+}
+
+tr:nth-child(even) {
+    background: #1a2332;
+}
+
+.back-btn {
+    margin-top: 20px;
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+.status {
+    margin-bottom: 15px;
+    color: #9ca3af;
+}
+</style>
+</head>
+
+<body>
+
+<h2>SWING Scanner</h2>
+
+<div class="status" id="status">
+Loading...
+</div>
+
+<table>
+<thead>
+<tr>
+    <th>Symbol</th>
+    <th>Setup</th>
+    <th>Close</th>
+    <th>OTM Strike</th>
+</tr>
+</thead>
+
+<tbody id="results">
+<tr>
+    <td colspan="4">Loading...</td>
+</tr>
+</tbody>
+</table>
+
+<button class="back-btn"
+onclick="location.href='../index.html'">
+Back
+</button>
+
+<script>
+
+fetch("../data/swing.json")
+.then(response => response.json())
+.then(data => {
+
+    document.getElementById("status").innerText =
+        `${data.length} candidate(s) found`;
+
+    const tbody =
+        document.getElementById("results");
+
+    tbody.innerHTML = "";
+
+    if (data.length === 0) {
+
+        tbody.innerHTML = `
+        <tr>
+            <td colspan="4">No candidates found</td>
+        </tr>`;
+
+        return;
+    }
+
+    data.forEach(stock => {
+
+        tbody.innerHTML += `
+        <tr>
+            <td>${stock.symbol}</td>
+            <td>${stock.setup}</td>
+            <td>${stock.close}</td>
+            <td>${stock.strike}</td>
+        </tr>`;
+    });
+
+})
+.catch(error => {
+
+    document.getElementById("status").innerText =
+        "Failed to load swing.json";
+
+    console.error(error);
+});
+
+</script>
+
+</body>
+</html>
