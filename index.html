@@ -52,17 +52,55 @@ body::before{
     max-width:600px;
 }
 
-button{
-    width:140px;
-    height:42px;
-    display:block;
-    margin-bottom:15px;
-    cursor:pointer;
+.game-buttons{
+    position:fixed;
+    bottom:24px;
+    right:24px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    z-index:10;
+}
+
+.game-btn{
+    width:48px;
+    height:48px;
+    border-radius:50%;
     border:none;
-    border-radius:6px;
-    background:rgba(15,23,42,.8);
+    cursor:pointer;
+    background:rgba(15,23,42,0.75);
     color:white;
+    font-size:22px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    backdrop-filter:blur(6px);
+    transition:transform 0.15s, background 0.15s;
+    position:relative;
+}
+
+.game-btn:hover{
+    background:rgba(15,23,42,0.95);
+    transform:scale(1.12);
+}
+
+.game-btn .tooltip{
+    position:absolute;
+    right:58px;
+    background:rgba(15,23,42,0.9);
+    color:white;
+    font-size:12px;
     font-weight:bold;
+    padding:4px 10px;
+    border-radius:4px;
+    white-space:nowrap;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 0.15s;
+}
+
+.game-btn:hover .tooltip{
+    opacity:1;
 }
 </style>
 </head>
@@ -76,13 +114,16 @@ button{
 
 <p id="quote"></p>
 
-<button onclick="location.href='screeners/swing.html'">
-SWING
-</button>
-
-<button onclick="location.href='screeners/after2pm.html'">
-AFTER2PM
-</button>
+<div class="game-buttons">
+    <button class="game-btn" onclick="location.href='chess/index.html'">
+        ♟
+        <span class="tooltip">Chess</span>
+    </button>
+    <button class="game-btn" onclick="location.href='parking/index.html'">
+        🚖
+        <span class="tooltip">Bombay Taxi</span>
+    </button>
+</div>
 
 <script>
 
