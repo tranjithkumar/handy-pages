@@ -2,138 +2,974 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>Chess</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offline Chess AI</title>
 
 <style>
+
 body{
-    margin:0;
-    background:#111;
-    color:white;
-    font-family:Arial;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    padding:20px;
+margin:0;
+background:#111;
+color:#fff;
+font-family:Arial;
+display:flex;
+flex-direction:column;
+align-items:center;
+padding:20px;
 }
 
 h1{
-    margin-bottom:10px;
+margin:10px;
 }
 
 #board{
-    width:min(90vw,600px);
+
+display:grid;
+
+grid-template-columns:
+repeat(8,72px);
+
+border:5px solid #222;
+
+}
+
+.square{
+
+width:72px;
+height:72px;
+
+display:flex;
+
+justify-content:center;
+
+align-items:center;
+
+font-size:44px;
+
+cursor:pointer;
+
+user-select:none;
+
+}
+
+.light{
+background:#f0d9b5;
+}
+
+.dark{
+background:#b58863;
+}
+
+.sel{
+outline:4px solid yellow;
 }
 
 .controls{
-    margin-top:15px;
-    display:flex;
-    gap:10px;
+
+display:flex;
+
+gap:10px;
+
+margin-top:15px;
+
+flex-wrap:wrap;
+
 }
 
-button{
-    padding:10px 16px;
-    cursor:pointer;
+button,
+select{
+
+padding:10px;
+
+font-size:16px;
+
 }
 
 #status{
-    margin-top:12px;
-}
-</style>
 
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard.min.css">
+margin-top:15px;
+
+font-size:18px;
+
+}
+
+</style>
 
 </head>
 
 <body>
 
-<h1>♟ Chess</h1>
+<h1>♟ Offline Chess</h1>
 
 <div id="board"></div>
 
 <div class="controls">
-<button onclick="undoMove()">Undo</button>
-<button onclick="newGame()">New Game</button>
+
+<select id="level">
+
+<option value="1">
+Level 1
+</option>
+
+<option value="2">
+Level 2
+</option>
+
+<option value="3" selected>
+Level 3
+</option>
+
+<option value="4">
+Level 4
+</option>
+
+<option value="5">
+Level 5
+</option>
+
+</select>
+
+<button onclick="newGame()">
+New Game
+</button>
+
+<button onclick="undoMove()">
+Undo
+</button>
+
 </div>
 
 <div id="status"></div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard.min.js"></script>
-
 <script>
 
-const game = new Chess();
+const U={
 
-let board = Chessboard("board",{
-    draggable:true,
-    position:"start",
+K:"♔",
+Q:"♕",
+R:"♖",
+B:"♗",
+N:"♘",
+P:"♙",
 
-    onDrop:(source,target)=>{
+k:"♚",
+q:"♛",
+r:"♜",
+b:"♝",
+n:"♞",
+p:"♟"
 
-        const move = game.move({
-            from:source,
-            to:target,
-            promotion:"q"
-        });
+};
 
-        if(move===null){
-            return "snapback";
-        }
+let board;
 
-        updateStatus();
-    },
+let selected=null;
 
-    onSnapEnd:()=>{
-        board.position(game.fen());
-    }
-});
+let history=[];
 
-function updateStatus(){
+function startBoard(){
 
-let text="";
+return [
 
-if(game.in_checkmate()){
-text="Checkmate";
+["r","n","b","q","k","b","n","r"],
+
+["p","p","p","p","p","p","p","p"],
+
+["","","","","","","",""],
+
+["","","","","","","",""],
+
+["","","","","","","",""],
+
+["","","","","","","",""],
+
+["P","P","P","P","P","P","P","P"],
+
+["R","N","B","Q","K","B","N","R"]
+
+];
+
 }
-else if(game.in_draw()){
-text="Draw";
+
+function clone(x){
+
+return JSON.parse(
+JSON.stringify(x)
+);
+
+}
+
+function inside(r,c){
+
+return(
+r>=0&&
+r<8&&
+c>=0&&
+c<8
+);
+
+}
+
+function white(p){
+
+return p&&
+p===p.toUpperCase();
+
+}
+
+function black(p){
+
+return p&&
+p===p.toLowerCase();
+
+}
+
+function same(a,b){
+
+if(!a||!b)
+return false;
+
+return(
+
+white(a)&&
+white(b)
+
+)||(
+
+black(a)&&
+black(b)
+
+);
+
+}
+
+function draw(){
+
+let el=
+document
+.getElementById(
+"board"
+);
+
+el.innerHTML="";
+
+for(
+let r=0;
+r<8;
+r++
+){
+
+for(
+let c=0;
+c<8;
+c++
+){
+
+let s=
+document
+.createElement(
+"div"
+);
+
+s.className=
+"square "+
+(
+(r+c)%2
+?
+"dark"
+:
+"light"
+);
+
+if(
+selected&&
+selected[0]===r&&
+selected[1]===c
+){
+
+s.classList.add(
+"sel"
+);
+
+}
+
+s.textContent=
+U[
+board[r][c]
+]||"";
+
+s.onclick=
+()=>
+click(
+r,
+c
+);
+
+el.appendChild(
+s
+);
+
+}
+
+}
+
+}
+
+function setStatus(t){
+
+document
+.getElementById(
+"status"
+)
+.textContent=t;
+
+}
+
+function legal(
+r,
+c
+){
+
+let p=
+board[r][c];
+
+let out=[];
+
+if(!p)
+return out;
+
+let W=
+white(p);
+
+function add(
+nr,
+nc
+){
+
+if(
+inside(
+nr,
+nc
+)&&
+!same(
+p,
+board[nr][nc]
+)
+){
+
+out.push([
+nr,
+nc
+]);
+
+}
+
+}
+function ray(
+dr,
+dc
+){
+
+let nr=
+r+dr;
+
+let nc=
+c+dc;
+
+while(
+inside(
+nr,
+nc
+)
+){
+
+if(
+!board[nr][nc]
+){
+
+out.push([
+nr,
+nc
+]);
+
 }
 else{
-text=
-(game.turn()==="w"
-? "White"
-: "Black")
-+" to move";
 
-if(game.in_check()){
-text+=" — Check";
-}
+if(
+!same(
+p,
+board[nr][nc]
+)
+){
+
+out.push([
+nr,
+nc
+]);
+
 }
 
-document.getElementById("status")
-.innerText=text;
+break;
+
+}
+
+nr+=dr;
+
+nc+=dc;
+
+}
+
+}
+
+switch(
+p.toLowerCase()
+){
+
+case "p":
+
+let dir=
+W
+?
+-1
+:
+1;
+
+if(
+inside(
+r+dir,
+c
+)&&
+!board[
+r+dir
+][c]
+){
+
+out.push([
+r+dir,
+c
+]);
+
+}
+
+for(
+let dc
+of
+[-1,1]
+){
+
+let nr=
+r+dir;
+
+let nc=
+c+dc;
+
+if(
+inside(
+nr,
+nc
+)&&
+board[nr][nc]
+&&
+!same(
+p,
+board[nr][nc]
+)
+){
+
+out.push([
+nr,
+nc
+]);
+
+}
+
+}
+
+break;
+
+case "n":
+
+[
+[-2,-1],
+[-2,1],
+
+[-1,-2],
+[-1,2],
+
+[1,-2],
+[1,2],
+
+[2,-1],
+[2,1]
+
+]
+
+.forEach(
+v=>
+add(
+r+v[0],
+c+v[1]
+)
+);
+
+break;
+
+case "b":
+
+ray(-1,-1);
+
+ray(-1,1);
+
+ray(1,-1);
+
+ray(1,1);
+
+break;
+
+case "r":
+
+ray(-1,0);
+
+ray(1,0);
+
+ray(0,-1);
+
+ray(0,1);
+
+break;
+
+case "q":
+
+ray(-1,-1);
+
+ray(-1,1);
+
+ray(1,-1);
+
+ray(1,1);
+
+ray(-1,0);
+
+ray(1,0);
+
+ray(0,-1);
+
+ray(0,1);
+
+break;
+
+case "k":
+
+for(
+let dr=-1;
+dr<=1;
+dr++
+){
+
+for(
+let dc=-1;
+dc<=1;
+dc++
+){
+
+if(
+dr||
+dc
+){
+
+add(
+r+dr,
+c+dc
+);
+
+}
+
+}
+
+}
+
+}
+
+return out;
+
+}
+
+function move(
+r1,
+c1,
+r2,
+c2
+){
+
+history.push(
+clone(
+board
+)
+);
+
+let piece=
+board[r1][c1];
+
+board[r2][c2]=
+piece;
+
+board[r1][c1]="";
+
+if(
+piece==="P"
+&&
+r2===0
+){
+
+board[r2][c2]="Q";
+
+}
+
+if(
+piece==="p"
+&&
+r2===7
+){
+
+board[r2][c2]="q";
+
+}
+
+}
+
+function click(
+r,
+c
+){
+
+if(
+selected
+){
+
+let moves=
+legal(
+selected[0],
+selected[1]
+);
+
+let ok=
+moves.some(
+m=>
+
+m[0]===r&&
+m[1]===c
+
+);
+
+if(ok){
+
+move(
+
+selected[0],
+
+selected[1],
+
+r,
+
+c
+
+);
+
+selected=
+null;
+
+draw();
+
+setTimeout(
+aiMove,
+100
+);
+
+return;
+
+}
+
+selected=
+null;
+
+draw();
+
+return;
+
+}
+
+if(
+white(
+board[r][c]
+)
+){
+
+selected=
+[
+r,
+c
+];
+
+draw();
+
+}
+
+}
+
+function allMoves(){
+
+let list=[];
+
+for(
+let r=0;
+r<8;
+r++
+){
+
+for(
+let c=0;
+c<8;
+c++
+){
+
+if(
+black(
+board[r][c]
+)
+){
+
+let m=
+legal(
+r,
+c
+);
+
+m.forEach(
+x=>
+
+list.push([
+r,
+c,
+x[0],
+x[1]
+])
+
+);
+
+}
+
+}
+
+}
+
+}
+
+return list;
+
+}
+function value(p){
+
+switch(
+p.toLowerCase()
+){
+
+case "p":
+return 10;
+
+case "n":
+return 30;
+
+case "b":
+return 30;
+
+case "r":
+return 50;
+
+case "q":
+return 90;
+
+case "k":
+return 900;
+
+default:
+return 0;
+
+}
+
+}
+
+function score(){
+
+let s=0;
+
+for(
+let r=0;
+r<8;
+r++
+){
+
+for(
+let c=0;
+c<8;
+c++
+){
+
+let p=
+board[r][c];
+
+if(!p)
+continue;
+
+if(
+black(p)
+)
+s+=
+value(p);
+
+else
+s-=
+value(p);
+
+}
+
+}
+
+return s;
+
+}
+
+function aiMove(){
+
+let moves=
+allMoves();
+
+if(
+!moves.length
+){
+
+setStatus(
+"You win"
+);
+
+return;
+
+}
+
+let level=
+Number(
+document
+.getElementById(
+"level"
+)
+.value
+);
+
+let best=
+moves[0];
+
+let bestScore=
+-99999;
+
+for(
+let i=0;
+i<
+Math.min(
+moves.length,
+level*10
+);
+i++
+){
+
+let m=
+moves[i];
+
+let copy=
+clone(
+board
+);
+
+move(
+m[0],
+m[1],
+m[2],
+m[3]
+);
+
+let sc=
+score();
+
+board=
+copy;
+
+history.pop();
+
+if(
+sc>
+bestScore
+){
+
+bestScore=
+sc;
+
+best=
+m;
+
+}
+
+}
+
+move(
+best[0],
+best[1],
+best[2],
+best[3]
+);
+
+draw();
+
+setStatus(
+"Your turn"
+);
 
 }
 
 function undoMove(){
-game.undo();
-board.position(game.fen());
-updateStatus();
+
+if(
+history.length
+){
+
+board=
+history.pop();
+
+selected=
+null;
+
+draw();
+
+}
+
 }
 
 function newGame(){
-game.reset();
-board.start();
-updateStatus();
+
+board=
+startBoard();
+
+history=[];
+
+selected=
+null;
+
+draw();
+
+setStatus(
+"Your turn"
+);
+
 }
 
-updateStatus();
+newGame();
 
 </script>
 
