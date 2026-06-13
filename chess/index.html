@@ -2,150 +2,115 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Offline Chess</title>
+<title>Chess</title>
 
 <style>
-
 body{
 margin:0;
 background:#111;
-font-family:Arial;
 color:white;
+font-family:Arial;
+text-align:center;
+}
 
+.screen{
+min-height:100vh;
 display:flex;
 flex-direction:column;
-
-align-items:center;
-
-padding:20px;
-}
-
-h1{
-margin:8px;
-}
-
-#board{
-
-display:grid;
-
-grid-template-columns:
-repeat(8,70px);
-
-border:4px solid #333;
-
-}
-
-.cell{
-
-width:70px;
-
-height:70px;
-
-display:flex;
-
 justify-content:center;
-
 align-items:center;
-
-font-size:44px;
-
-cursor:pointer;
-
-user-select:none;
-
-}
-
-.white{
-background:#f0d9b5;
-}
-
-.black{
-background:#b58863;
-}
-
-.sel{
-
-outline:4px solid yellow;
-
-}
-
-.controls{
-
-margin-top:15px;
-
-display:flex;
-
-gap:10px;
-
 }
 
 button{
-
-padding:10px;
-
+padding:12px 20px;
+font-size:16px;
 cursor:pointer;
-
+margin:6px;
 }
 
-#status{
+#game{
+display:none;
+padding:20px;
+}
 
-margin-top:10px;
+#board{
+display:grid;
+grid-template-columns:repeat(8,70px);
+justify-content:center;
+}
 
+.cell{
+width:70px;
+height:70px;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:42px;
+cursor:pointer;
+user-select:none;
+}
+
+.w{background:#f0d9b5;}
+.b{background:#b58863;}
+
+.sel{
+outline:4px solid yellow;
 }
 
 </style>
-
 </head>
 
 <body>
 
+<div id="home" class="screen">
+
 <h1>♟ Chess</h1>
+
+<button onclick="startGame()">
+Play
+</button>
+
+</div>
+
+<div id="game">
+
+<h2 id="turn"></h2>
 
 <div id="board"></div>
 
-<div class="controls">
+<div>
 
 <button onclick="newGame()">
 New Game
 </button>
 
-<button onclick="undo()">
+<button onclick="undoMove()">
 Undo
+</button>
+
+<button onclick="goHome()">
+Home
 </button>
 
 </div>
 
-<div id="status"></div>
+</div>
 
 <script>
 
 const U={
-
-K:"♔",
-Q:"♕",
-R:"♖",
-B:"♗",
-N:"♘",
-P:"♙",
-
-k:"♚",
-q:"♛",
-r:"♜",
-b:"♝",
-n:"♞",
-p:"♟"
-
+K:"♔",Q:"♕",R:"♖",B:"♗",N:"♘",P:"♙",
+k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"
 };
 
 let board=[];
-
 let selected=null;
-
+let turn="white";
 let history=[];
 
-function resetBoard(){
+function initial(){
 
 return [
 
@@ -169,48 +134,77 @@ return [
 
 }
 
+function startGame(){
+
+document.getElementById(
+"home"
+).style.display="none";
+
+document.getElementById(
+"game"
+).style.display="block";
+
+newGame();
+
+}
+
+function goHome(){
+
+document.getElementById(
+"game"
+).style.display="none";
+
+document.getElementById(
+"home"
+).style.display="flex";
+
+}
+
+function newGame(){
+
+board=initial();
+
+history=[];
+
+selected=null;
+
+turn="white";
+
+draw();
+
+}
+
 function draw(){
 
+document.getElementById(
+"turn"
+).textContent=
+turn.toUpperCase()+" TURN";
+
 const root=
-document
-.getElementById(
+document.getElementById(
 "board"
 );
 
 root.innerHTML="";
 
-for(
-let r=0;
-r<8;
-r++
-){
+for(let r=0;r<8;r++){
 
-for(
-let c=0;
-c<8;
-c++
-){
+for(let c=0;c<8;c++){
 
 const d=
-document
-.createElement(
+document.createElement(
 "div"
 );
 
 d.className=
 "cell "+
-(
-(r+c)%2
-?
-"black"
-:
-"white"
-);
+((r+c)%2?"b":"w");
 
 if(
 selected&&
-selected[0]==r&&
-selected[1]==c
+selected[0]===r&&
+selected[1]===c
 ){
 
 d.classList.add(
@@ -225,14 +219,13 @@ board[r][c]
 ]||"";
 
 d.onclick=
-()=>tap(
+()=>clickCell(
 r,
 c
 );
 
 root.appendChild(
-d
-);
+d);
 
 }
 
@@ -240,27 +233,36 @@ d
 
 }
 
-function isWhite(p){
+function white(p){
 
 return p&&
 p===p.toUpperCase();
 
 }
 
-function isBlack(p){
+function black(p){
 
 return p&&
 p===p.toLowerCase();
 
 }
 
-function tap(r,c){
+function own(p){
 
-if(
+return turn==="white"
+?
+white(p)
+:
+black(p);
 
-selected
+}
 
-){
+function clickCell(r,c){
+
+let p=
+board[r][c];
+
+if(selected){
 
 history.push(
 JSON.stringify(
@@ -269,7 +271,6 @@ board
 );
 
 board[r][c]=
-
 board[
 selected[0]
 ][
@@ -284,28 +285,24 @@ selected[1]
 
 selected=null;
 
-draw();
+turn=
+turn==="white"
+?
+"black"
+:
+"white";
 
-setTimeout(
-ai,
-300
-);
+draw();
 
 return;
 
 }
 
 if(
-isWhite(
-board[r][c]
-)
+own(p)
 ){
 
-selected=
-[
-r,
-c
-];
+selected=[r,c];
 
 draw();
 
@@ -313,121 +310,7 @@ draw();
 
 }
 
-function ai(){
-
-let pieces=[];
-
-for(
-let r=0;
-r<8;
-r++
-){
-
-for(
-let c=0;
-c<8;
-c++
-){
-
-if(
-isBlack(
-board[r][c]
-)
-){
-
-pieces.push(
-[
-r,
-c
-]
-);
-
-}
-
-}
-
-}
-
-if(
-!pieces.length
-){
-
-status(
-"You win"
-);
-
-return;
-
-}
-
-let p=
-pieces[
-Math.floor(
-Math.random()
-*
-pieces.length
-)
-];
-
-let dirs=[
-
-[-1,0],
-[1,0],
-
-[0,-1],
-[0,1]
-
-];
-
-let d=
-dirs[
-Math.floor(
-Math.random()
-*
-dirs.length
-)
-];
-
-let nr=
-Math.max(
-0,
-Math.min(
-7,
-p[0]+d[0]
-)
-);
-
-let nc=
-Math.max(
-0,
-Math.min(
-7,
-p[1]+d[1]
-)
-);
-
-board[nr][nc]=
-board[
-p[0]
-][
-p[1]
-];
-
-board[
-p[0]
-][
-p[1]
-]="";
-
-draw();
-
-status(
-"Your turn"
-);
-
-}
-
-function undo(){
+function undoMove(){
 
 if(
 history.length
@@ -438,40 +321,20 @@ JSON.parse(
 history.pop()
 );
 
-draw();
-
-}
-
-}
-
-function status(t){
-
-document
-.getElementById(
-"status"
-)
-.textContent=t;
-
-}
-
-function newGame(){
-
-board=
-resetBoard();
+turn=
+turn==="white"
+?
+"black"
+:
+"white";
 
 selected=null;
 
-history=[];
-
 draw();
-
-status(
-"Your turn"
-);
 
 }
 
-newGame();
+}
 
 </script>
 
