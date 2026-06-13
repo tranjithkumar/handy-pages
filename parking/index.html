@@ -1,483 +1,481 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bombay Taxi — RK Pages</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mini Truck Simulator</title>
+
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
 
-body{
-    background:#0f172a;
-    color:white;
-    font-family:Arial,sans-serif;
-    min-height:100vh;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    padding:20px;
-}
-
-.top-bar{
-    width:100%;
-    max-width:420px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-bottom:14px;
-}
-
-.back-btn{
-    background:rgba(255,255,255,0.08);
-    border:none;
-    color:white;
-    padding:6px 14px;
-    border-radius:6px;
-    cursor:pointer;
-    font-size:13px;
-}
-.back-btn:hover{background:rgba(255,255,255,0.15)}
-
-.title{font-size:18px;font-weight:bold}
-
-.meta{
-    font-size:13px;
-    color:#94a3b8;
-    text-align:right;
-}
-
-#grid-wrap{
-    position:relative;
-    touch-action:none;
+html,body{
+margin:0;
+overflow:hidden;
+background:#87ceeb;
+font-family:Arial;
 }
 
 canvas{
-    display:block;
-    border-radius:6px;
+display:block;
 }
 
-.controls{
-    margin-top:14px;
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    justify-content:center;
+#ui{
+position:absolute;
+top:10px;
+left:10px;
+
+color:white;
+
+background:rgba(0,0,0,.45);
+
+padding:12px;
+
+border-radius:10px;
+
+line-height:1.7;
 }
 
-.ctrl-btn{
-    background:rgba(255,255,255,0.08);
-    border:none;
-    color:white;
-    padding:8px 18px;
-    border-radius:6px;
-    cursor:pointer;
-    font-size:13px;
-    font-weight:bold;
-}
-.ctrl-btn:hover{background:rgba(255,255,255,0.18)}
+button{
 
-.level-row{
-    display:flex;
-    gap:6px;
-    flex-wrap:wrap;
-    justify-content:center;
-    margin-top:10px;
-    max-width:420px;
+padding:8px 12px;
+
+cursor:pointer;
+
 }
 
-.lv-btn{
-    width:36px;height:36px;
-    border-radius:6px;
-    border:none;
-    background:rgba(255,255,255,0.08);
-    color:#94a3b8;
-    font-size:12px;
-    font-weight:bold;
-    cursor:pointer;
-}
-.lv-btn.done{background:rgba(34,197,94,0.25);color:#4ade80}
-.lv-btn.active{background:rgba(234,179,8,0.3);color:#fde047}
-.lv-btn:hover{background:rgba(255,255,255,0.18);color:white}
-
-.win-msg{
-    margin-top:12px;
-    font-size:15px;
-    font-weight:bold;
-    color:#4ade80;
-    min-height:22px;
-    text-align:center;
-}
 </style>
 </head>
+
 <body>
 
-<div class="top-bar">
-    <button class="back-btn" onclick="location.href='../index.html'">← Home</button>
-    <span class="title">🚖 Bombay Taxi</span>
-    <div class="meta">
-        <div id="lv-label">Level 1</div>
-        <div id="moves-label">Moves: 0</div>
-    </div>
+<canvas id="game"></canvas>
+
+<div id="ui">
+
+<div>Speed: <span id="speed">0</span> km/h</div>
+
+<div>Distance: <span id="dist">0</span> km</div>
+
+<div>Cargo: <span id="cargo">100</span>%</div>
+
+<button onclick="resetGame()">
+Restart
+</button>
+
 </div>
-
-<div id="grid-wrap">
-    <canvas id="c"></canvas>
-</div>
-
-<div class="win-msg" id="win-msg"></div>
-
-<div class="controls">
-    <button class="ctrl-btn" onclick="restartLevel()">Restart</button>
-    <button class="ctrl-btn" onclick="nextLevel()">Next →</button>
-</div>
-
-<div class="level-row" id="level-row"></div>
 
 <script>
-const COLS=6,ROWS=6;
-let CELL;
 
-const LEVELS=[
-    {
-        cars:[
-            {id:0,r:2,c:0,len:2,dir:'h',taxi:true},
-            {id:1,r:0,c:1,len:2,dir:'v'},
-            {id:2,r:0,c:3,len:2,dir:'v'},
-            {id:3,r:3,c:2,len:2,dir:'h'},
-            {id:4,r:4,c:0,len:2,dir:'v'},
-            {id:5,r:4,c:4,len:2,dir:'v'},
-        ],
-        exit:{r:2,side:'right'}
-    },
-    {
-        cars:[
-            {id:0,r:2,c:0,len:2,dir:'h',taxi:true},
-            {id:1,r:0,c:2,len:3,dir:'v'},
-            {id:2,r:3,c:2,len:2,dir:'h'},
-            {id:3,r:1,c:4,len:2,dir:'v'},
-            {id:4,r:4,c:0,len:2,dir:'h'},
-            {id:5,r:0,c:5,len:2,dir:'v'},
-        ],
-        exit:{r:2,side:'right'}
-    },
-    {
-        cars:[
-            {id:0,r:2,c:1,len:2,dir:'h',taxi:true},
-            {id:1,r:0,c:3,len:3,dir:'v'},
-            {id:2,r:0,c:1,len:2,dir:'v'},
-            {id:3,r:3,c:0,len:2,dir:'h'},
-            {id:4,r:4,c:3,len:2,dir:'h'},
-            {id:5,r:1,c:5,len:3,dir:'v'},
-            {id:6,r:4,c:1,len:2,dir:'v'},
-        ],
-        exit:{r:2,side:'right'}
-    },
-    {
-        cars:[
-            {id:0,r:2,c:0,len:2,dir:'h',taxi:true},
-            {id:1,r:0,c:2,len:2,dir:'v'},
-            {id:2,r:2,c:3,len:2,dir:'v'},
-            {id:3,r:0,c:4,len:3,dir:'v'},
-            {id:4,r:3,c:1,len:3,dir:'h'},
-            {id:5,r:5,c:0,len:2,dir:'h'},
-            {id:6,r:0,c:0,len:2,dir:'v'},
-        ],
-        exit:{r:2,side:'right'}
-    },
-    {
-        cars:[
-            {id:0,r:2,c:0,len:2,dir:'h',taxi:true},
-            {id:1,r:0,c:1,len:3,dir:'v'},
-            {id:2,r:0,c:3,len:2,dir:'h'},
-            {id:3,r:1,c:4,len:3,dir:'v'},
-            {id:4,r:3,c:2,len:3,dir:'h'},
-            {id:5,r:4,c:0,len:2,dir:'h'},
-            {id:6,r:3,c:5,len:3,dir:'v'},
-            {id:7,r:0,c:5,len:1,dir:'v'},
-        ],
-        exit:{r:2,side:'right'}
-    },
-    {
-        cars:[
-            {id:0,r:2,c:0,len:2,dir:'h',taxi:true},
-            {id:1,r:0,c:0,len:2,dir:'h'},
-            {id:2,r:0,c:2,len:3,dir:'v'},
-            {id:3,r:0,c:4,len:2,dir:'h'},
-            {id:4,r:1,c:5,len:2,dir:'v'},
-            {id:5,r:3,c:3,len:3,dir:'h'},
-            {id:6,r:4,c:1,len:2,dir:'v'},
-            {id:7,r:5,c:3,len:3,dir:'h'},
-        ],
-        exit:{r:2,side:'right'}
-    },
-    {
-        cars:[
-            {id:0,r:3,c:0,len:2,dir:'h',taxi:true},
-            {id:1,r:0,c:1,len:2,dir:'v'},
-            {id:2,r:2,c:1,len:2,dir:'v'},
-            {id:3,r:4,c:1,len:2,dir:'v'},
-            {id:4,r:0,c:3,len:3,dir:'v'},
-            {id:5,r:3,c:3,len:2,dir:'h'},
-            {id:6,r:1,c:5,len:2,dir:'v'},
-            {id:7,r:4,c:4,len:2,dir:'h'},
-        ],
-        exit:{r:3,side:'right'}
-    },
-    {
-        cars:[
-            {id:0,r:2,c:0,len:2,dir:'h',taxi:true},
-            {id:1,r:0,c:0,len:2,dir:'v'},
-            {id:2,r:0,c:2,len:2,dir:'h'},
-            {id:3,r:0,c:4,len:3,dir:'v'},
-            {id:4,r:1,c:2,len:2,dir:'v'},
-            {id:5,r:2,c:3,len:2,dir:'h'},
-            {id:6,r:3,c:1,len:2,dir:'h'},
-            {id:7,r:4,c:0,len:2,dir:'v'},
-            {id:8,r:4,c:3,len:3,dir:'h'},
-        ],
-        exit:{r:2,side:'right'}
-    },
-];
+const c=
+document
+.getElementById(
+"game"
+);
 
-let currentLevel=0;
-let cars=[];
-let moves=0;
-let won=false;
-let solved=JSON.parse(localStorage.getItem('btSolved')||'[]');
+const x=
+c.getContext(
+"2d"
+);
 
-let drag=null;
-let dragStartCell=null;
-let dragStartMouse=null;
+function size(){
 
-const canvas=document.getElementById('c');
-const ctx=canvas.getContext('2d');
+c.width=
+innerWidth;
 
-function calcCell(){
-    const vw=Math.min(window.innerWidth-40,420);
-    CELL=Math.floor(vw/COLS);
-    canvas.width=CELL*COLS;
-    canvas.height=CELL*ROWS;
+c.height=
+innerHeight;
+
 }
 
-function deepCopy(lvl){
-    return lvl.cars.map(c=>({...c}));
+size();
+
+addEventListener(
+"resize",
+size
+);
+
+let keys={};
+
+addEventListener(
+"keydown",
+e=>keys[e.key]=1
+);
+
+addEventListener(
+"keyup",
+e=>keys[e.key]=0
+);
+
+let truck;
+
+let road;
+
+let distance;
+
+let cargo;
+
+function resetGame(){
+
+truck={
+
+x:0,
+
+speed:0,
+
+angle:0
+
+};
+
+road=0;
+
+distance=0;
+
+cargo=100;
+
 }
 
-function loadLevel(idx){
-    currentLevel=idx;
-    const lvl=LEVELS[idx];
-    cars=deepCopy(lvl);
-    moves=0;won=false;
-    document.getElementById('win-msg').textContent='';
-    document.getElementById('lv-label').textContent='Level '+(idx+1);
-    document.getElementById('moves-label').textContent='Moves: 0';
-    buildLevelButtons();
-    draw();
+resetGame();
+
+function update(){
+
+if(
+keys.ArrowUp||
+keys.w
+){
+
+truck.speed+=.12;
+
 }
 
-function restartLevel(){loadLevel(currentLevel);}
+if(
+keys.ArrowDown||
+keys.s
+){
 
-function nextLevel(){
-    if(currentLevel<LEVELS.length-1)loadLevel(currentLevel+1);
+truck.speed-=.18;
+
 }
 
-function buildLevelButtons(){
-    const row=document.getElementById('level-row');
-    row.innerHTML='';
-    LEVELS.forEach((_,i)=>{
-        const b=document.createElement('button');
-        b.className='lv-btn'+(solved.includes(i)?' done':'')+(i===currentLevel?' active':'');
-        b.textContent=i+1;
-        b.onclick=()=>loadLevel(i);
-        row.appendChild(b);
-    });
+truck.speed*=.985;
+
+truck.speed=
+Math.max(
+-3,
+Math.min(
+12,
+truck.speed
+)
+);
+
+if(
+keys.ArrowLeft||
+keys.a
+){
+
+truck.x-=
+3+
+truck.speed*.4;
+
 }
 
-const COLORS=[
-    '#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6',
-    '#1abc9c','#e67e22','#e91e63','#00bcd4','#8bc34a'
-];
-const TAXI_COLOR='#f5c518';
+if(
+keys.ArrowRight||
+keys.d
+){
+
+truck.x+=
+3+
+truck.speed*.4;
+
+}
+
+truck.x=
+Math.max(
+-260,
+Math.min(
+260,
+truck.x
+)
+);
+
+road+=
+truck.speed*6;
+
+distance+=
+Math.max(
+0,
+truck.speed
+)*0.02;
+
+if(
+Math.abs(
+truck.x
+)>180
+){
+
+cargo-=
+0.06*
+truck.speed;
+
+}
+
+cargo=
+Math.max(
+0,
+cargo
+);
+
+document
+.getElementById(
+"speed"
+)
+.textContent=
+Math.round(
+truck.speed*10
+);
+
+document
+.getElementById(
+"dist"
+)
+.textContent=
+distance
+.toFixed(1);
+
+document
+.getElementById(
+"cargo"
+)
+.textContent=
+cargo
+.toFixed(0);
+
+}
+
+function drawRoad(){
+
+x.fillStyle=
+"#87ceeb";
+
+x.fillRect(
+0,
+0,
+c.width,
+c.height
+);
+
+x.fillStyle=
+"#4b8b3b";
+
+x.fillRect(
+0,
+c.height*.45,
+c.width,
+c.height
+);
+
+for(
+let y=
+c.height*.45;
+y<
+c.height;
+y+=8
+){
+
+let p=
+(y-
+c.height*.45)/
+(c.height*.55);
+
+let rw=
+150+
+p*900;
+
+let cx=
+c.width/2
++
+truck.x*
+p;
+
+x.fillStyle=
+"#444";
+
+x.fillRect(
+
+cx-rw/2,
+
+y,
+
+rw,
+
+10
+
+);
+
+x.strokeStyle=
+"white";
+
+x.lineWidth=
+3;
+
+if(
+Math.floor(
+(y+road)%60
+)<30
+){
+
+x.beginPath();
+
+x.moveTo(
+cx,
+y
+);
+
+x.lineTo(
+cx,
+y+10
+);
+
+x.stroke();
+
+}
+
+}
+
+}
+
+function drawTruck(){
+
+let y=
+c.height*.78;
+
+let tx=
+c.width/2;
+
+x.save();
+
+x.translate(
+tx,
+y
+);
+
+x.fillStyle=
+"#d72626";
+
+x.fillRect(
+-45,
+-55,
+90,
+110
+);
+
+x.fillStyle=
+"#ddd";
+
+x.fillRect(
+-32,
+-42,
+64,
+28
+);
+
+x.fillStyle=
+"#222";
+
+x.fillRect(
+-48,
+-58,
+96,
+12
+);
+
+x.beginPath();
+
+x.arc(
+-34,
+58,
+14,
+0,
+7
+);
+
+x.arc(
+34,
+58,
+14,
+0,
+7
+);
+
+x.fill();
+
+x.restore();
+
+}
 
 function draw(){
-    const W=canvas.width,H=canvas.height;
-    ctx.clearRect(0,0,W,H);
 
-    ctx.fillStyle='#1e293b';
-    ctx.beginPath();
-    ctx.roundRect(0,0,W,H,6);
-    ctx.fill();
+drawRoad();
 
-    for(let r=0;r<ROWS;r++){
-        for(let c=0;c<COLS;c++){
-            ctx.fillStyle=(r+c)%2===0?'#263248':'#1e2a40';
-            ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
-        }
-    }
+drawTruck();
 
-    const lvl=LEVELS[currentLevel];
-    const exitR=lvl.exit.r;
-    ctx.fillStyle='#4ade80';
-    ctx.fillRect(W,exitR*CELL+CELL*0.15,12,CELL*0.7);
+if(
+cargo<=0
+){
 
-    ctx.strokeStyle='#0f172a';
-    ctx.lineWidth=1;
-    for(let r=0;r<=ROWS;r++){ctx.beginPath();ctx.moveTo(0,r*CELL);ctx.lineTo(W,r*CELL);ctx.stroke();}
-    for(let c=0;c<=COLS;c++){ctx.beginPath();ctx.moveTo(c*CELL,0);ctx.lineTo(c*CELL,H);ctx.stroke();}
+x.fillStyle=
+"rgba(0,0,0,.7)";
 
-    cars.forEach((car,i)=>{
-        const pad=4;
-        const x=car.c*CELL+pad;
-        const y=car.r*CELL+pad;
-        const w=car.dir==='h'?car.len*CELL-pad*2:CELL-pad*2;
-        const h=car.dir==='v'?car.len*CELL-pad*2:CELL-pad*2;
-        const color=car.taxi?TAXI_COLOR:COLORS[i%COLORS.length];
+x.fillRect(
+0,
+0,
+c.width,
+c.height
+);
 
-        ctx.fillStyle=color;
-        ctx.beginPath();
-        ctx.roundRect(x,y,w,h,6);
-        ctx.fill();
+x.fillStyle=
+"white";
 
-        ctx.fillStyle='rgba(0,0,0,0.25)';
-        ctx.beginPath();
-        if(car.dir==='h'){
-            ctx.roundRect(x+w-14,y+4,8,h-8,3);
-        }else{
-            ctx.roundRect(x+4,y+h-14,w-8,8,3);
-        }
-        ctx.fill();
+x.font=
+"50px Arial";
 
-        if(car.taxi){
-            ctx.fillStyle='#0f172a';
-            ctx.font=`bold ${Math.floor(CELL*0.38)}px Arial`;
-            ctx.textAlign='center';
-            ctx.textBaseline='middle';
-            ctx.fillText('TAXI',x+w/2,y+h/2);
-        }
-    });
+x.fillText(
+
+"Cargo Lost",
+
+c.width/2-140,
+
+c.height/2
+
+);
+
+x.font=
+"22px Arial";
+
+x.fillText(
+
+"Press Restart",
+
+c.width/2-85,
+
+c.height/2+45
+
+);
+
+return;
+
 }
 
-function getCarAt(r,c){
-    for(let i=0;i<cars.length;i++){
-        const car=cars[i];
-        if(car.dir==='h'){
-            if(car.r===r&&c>=car.c&&c<car.c+car.len)return i;
-        }else{
-            if(car.c===c&&r>=car.r&&r<car.r+car.len)return i;
-        }
-    }
-    return -1;
+update();
+
+requestAnimationFrame(
+draw
+);
+
 }
 
-function canMove(idx,delta){
-    const car=cars[idx];
-    const nb=[...cars];
-    if(car.dir==='h'){
-        const nc=car.c+delta;
-        if(nc<0||nc+car.len>COLS)return false;
-        for(let j=0;j<cars.length;j++){
-            if(j===idx)continue;
-            const o=cars[j];
-            for(let k=nc;k<nc+car.len;k++){
-                if(o.dir==='h'&&o.r===car.r&&k>=o.c&&k<o.c+o.len)return false;
-                if(o.dir==='v'&&o.c===k&&car.r>=o.r&&car.r<o.r+o.len)return false;
-            }
-        }
-    }else{
-        const nr=car.r+delta;
-        if(nr<0||nr+car.len>ROWS)return false;
-        for(let j=0;j<cars.length;j++){
-            if(j===idx)continue;
-            const o=cars[j];
-            for(let k=nr;k<nr+car.len;k++){
-                if(o.dir==='v'&&o.c===car.c&&k>=o.r&&k<o.r+o.len)return false;
-                if(o.dir==='h'&&o.r===k&&car.c>=o.c&&car.c<o.c+o.len)return false;
-            }
-        }
-    }
-    return true;
-}
+draw();
 
-function moveCar(idx,delta){
-    const car=cars[idx];
-    if(car.dir==='h')car.c+=delta;
-    else car.r+=delta;
-    moves++;
-    document.getElementById('moves-label').textContent='Moves: '+moves;
-    checkWin();
-    draw();
-}
-
-function checkWin(){
-    const taxi=cars.find(c=>c.taxi);
-    const lvl=LEVELS[currentLevel];
-    if(!taxi||won)return;
-    if(taxi.r===lvl.exit.r&&taxi.c+taxi.len===COLS){
-        won=true;
-        document.getElementById('win-msg').textContent='You escaped! '+moves+' moves 🎉';
-        if(!solved.includes(currentLevel)){
-            solved.push(currentLevel);
-            localStorage.setItem('btSolved',JSON.stringify(solved));
-        }
-        buildLevelButtons();
-    }
-}
-
-function getMouseCell(e){
-    const rect=canvas.getBoundingClientRect();
-    const ex=e.clientX??e.touches[0].clientX;
-    const ey=e.clientY??e.touches[0].clientY;
-    return{
-        r:Math.floor((ey-rect.top)/CELL),
-        c:Math.floor((ex-rect.left)/CELL),
-        px:ex-rect.left,
-        py:ey-rect.top
-    };
-}
-
-canvas.addEventListener('mousedown',startDrag);
-canvas.addEventListener('touchstart',e=>{e.preventDefault();startDrag(e);},{passive:false});
-
-function startDrag(e){
-    if(won)return;
-    const {r,c,px,py}=getMouseCell(e);
-    const idx=getCarAt(r,c);
-    if(idx<0)return;
-    drag={idx,moved:false};
-    dragStartCell={r,c};
-    dragStartMouse={px,py};
-}
-
-window.addEventListener('mousemove',onDrag);
-window.addEventListener('touchmove',e=>{e.preventDefault();onDrag(e);},{passive:false});
-
-function onDrag(e){
-    if(!drag)return;
-    const rect=canvas.getBoundingClientRect();
-    const ex=e.clientX??e.touches[0].clientX;
-    const ey=e.clientY??e.touches[0].clientY;
-    const px=ex-rect.left;
-    const py=ey-rect.top;
-    const car=cars[drag.idx];
-    const dx=Math.round((px-dragStartMouse.px)/CELL);
-    const dy=Math.round((py-dragStartMouse.py)/CELL);
-    const delta=car.dir==='h'?dx:dy;
-    if(delta===0)return;
-    const step=delta>0?1:-1;
-    for(let s=0;s<Math.abs(delta);s++){
-        if(canMove(drag.idx,step)){moveCar(drag.idx,step);drag.moved=true;}
-    }
-    dragStartMouse={px,py};
-}
-
-window.addEventListener('mouseup',endDrag);
-window.addEventListener('touchend',endDrag);
-function endDrag(){drag=null;}
-
-window.addEventListener('resize',()=>{calcCell();draw();});
-
-calcCell();
-loadLevel(0);
 </script>
+
 </body>
 </html>
