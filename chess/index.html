@@ -1,25 +1,29 @@
+```html
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Offline Chess AI</title>
+<title>Offline Chess</title>
 
 <style>
 
 body{
 margin:0;
 background:#111;
-color:#fff;
 font-family:Arial;
+color:white;
+
 display:flex;
 flex-direction:column;
+
 align-items:center;
+
 padding:20px;
 }
 
 h1{
-margin:10px;
+margin:8px;
 }
 
 #board{
@@ -27,16 +31,17 @@ margin:10px;
 display:grid;
 
 grid-template-columns:
-repeat(8,72px);
+repeat(8,70px);
 
-border:5px solid #222;
+border:4px solid #333;
 
 }
 
-.square{
+.cell{
 
-width:72px;
-height:72px;
+width:70px;
+
+height:70px;
 
 display:flex;
 
@@ -52,44 +57,41 @@ user-select:none;
 
 }
 
-.light{
+.white{
 background:#f0d9b5;
 }
 
-.dark{
+.black{
 background:#b58863;
 }
 
 .sel{
+
 outline:4px solid yellow;
+
 }
 
 .controls{
+
+margin-top:15px;
 
 display:flex;
 
 gap:10px;
 
-margin-top:15px;
-
-flex-wrap:wrap;
-
 }
 
-button,
-select{
+button{
 
 padding:10px;
 
-font-size:16px;
+cursor:pointer;
 
 }
 
 #status{
 
-margin-top:15px;
-
-font-size:18px;
+margin-top:10px;
 
 }
 
@@ -99,41 +101,17 @@ font-size:18px;
 
 <body>
 
-<h1>♟ Offline Chess</h1>
+<h1>♟ Chess</h1>
 
 <div id="board"></div>
 
 <div class="controls">
 
-<select id="level">
-
-<option value="1">
-Level 1
-</option>
-
-<option value="2">
-Level 2
-</option>
-
-<option value="3" selected>
-Level 3
-</option>
-
-<option value="4">
-Level 4
-</option>
-
-<option value="5">
-Level 5
-</option>
-
-</select>
-
 <button onclick="newGame()">
 New Game
 </button>
 
-<button onclick="undoMove()">
+<button onclick="undo()">
 Undo
 </button>
 
@@ -161,13 +139,13 @@ p:"♟"
 
 };
 
-let board;
+let board=[];
 
 let selected=null;
 
 let history=[];
 
-function startBoard(){
+function resetBoard(){
 
 return [
 
@@ -191,67 +169,15 @@ return [
 
 }
 
-function clone(x){
-
-return JSON.parse(
-JSON.stringify(x)
-);
-
-}
-
-function inside(r,c){
-
-return(
-r>=0&&
-r<8&&
-c>=0&&
-c<8
-);
-
-}
-
-function white(p){
-
-return p&&
-p===p.toUpperCase();
-
-}
-
-function black(p){
-
-return p&&
-p===p.toLowerCase();
-
-}
-
-function same(a,b){
-
-if(!a||!b)
-return false;
-
-return(
-
-white(a)&&
-white(b)
-
-)||(
-
-black(a)&&
-black(b)
-
-);
-
-}
-
 function draw(){
 
-let el=
+const root=
 document
 .getElementById(
 "board"
 );
 
-el.innerHTML="";
+root.innerHTML="";
 
 for(
 let r=0;
@@ -265,48 +191,47 @@ c<8;
 c++
 ){
 
-let s=
+const d=
 document
 .createElement(
 "div"
 );
 
-s.className=
-"square "+
+d.className=
+"cell "+
 (
 (r+c)%2
 ?
-"dark"
+"black"
 :
-"light"
+"white"
 );
 
 if(
 selected&&
-selected[0]===r&&
-selected[1]===c
+selected[0]==r&&
+selected[1]==c
 ){
 
-s.classList.add(
+d.classList.add(
 "sel"
 );
 
 }
 
-s.textContent=
+d.textContent=
 U[
 board[r][c]
 ]||"";
 
-s.onclick=
-()=>
-click(
+d.onclick=
+()=>tap(
 r,
 c
 );
 
-el.appendChild(
-s
+root.appendChild(
+d
 );
 
 }
@@ -315,391 +240,63 @@ s
 
 }
 
-function setStatus(t){
+function isWhite(p){
 
-document
-.getElementById(
-"status"
-)
-.textContent=t;
+return p&&
+p===p.toUpperCase();
 
 }
 
-function legal(
-r,
-c
-){
+function isBlack(p){
 
-let p=
-board[r][c];
+return p&&
+p===p.toLowerCase();
 
-let out=[];
+}
 
-if(!p)
-return out;
-
-let W=
-white(p);
-
-function add(
-nr,
-nc
-){
+function tap(r,c){
 
 if(
-inside(
-nr,
-nc
-)&&
-!same(
-p,
-board[nr][nc]
-)
-){
 
-out.push([
-nr,
-nc
-]);
+selected
 
-}
-
-}
-function ray(
-dr,
-dc
-){
-
-let nr=
-r+dr;
-
-let nc=
-c+dc;
-
-while(
-inside(
-nr,
-nc
-)
-){
-
-if(
-!board[nr][nc]
-){
-
-out.push([
-nr,
-nc
-]);
-
-}
-else{
-
-if(
-!same(
-p,
-board[nr][nc]
-)
-){
-
-out.push([
-nr,
-nc
-]);
-
-}
-
-break;
-
-}
-
-nr+=dr;
-
-nc+=dc;
-
-}
-
-}
-
-switch(
-p.toLowerCase()
-){
-
-case "p":
-
-let dir=
-W
-?
--1
-:
-1;
-
-if(
-inside(
-r+dir,
-c
-)&&
-!board[
-r+dir
-][c]
-){
-
-out.push([
-r+dir,
-c
-]);
-
-}
-
-for(
-let dc
-of
-[-1,1]
-){
-
-let nr=
-r+dir;
-
-let nc=
-c+dc;
-
-if(
-inside(
-nr,
-nc
-)&&
-board[nr][nc]
-&&
-!same(
-p,
-board[nr][nc]
-)
-){
-
-out.push([
-nr,
-nc
-]);
-
-}
-
-}
-
-break;
-
-case "n":
-
-[
-[-2,-1],
-[-2,1],
-
-[-1,-2],
-[-1,2],
-
-[1,-2],
-[1,2],
-
-[2,-1],
-[2,1]
-
-]
-
-.forEach(
-v=>
-add(
-r+v[0],
-c+v[1]
-)
-);
-
-break;
-
-case "b":
-
-ray(-1,-1);
-
-ray(-1,1);
-
-ray(1,-1);
-
-ray(1,1);
-
-break;
-
-case "r":
-
-ray(-1,0);
-
-ray(1,0);
-
-ray(0,-1);
-
-ray(0,1);
-
-break;
-
-case "q":
-
-ray(-1,-1);
-
-ray(-1,1);
-
-ray(1,-1);
-
-ray(1,1);
-
-ray(-1,0);
-
-ray(1,0);
-
-ray(0,-1);
-
-ray(0,1);
-
-break;
-
-case "k":
-
-for(
-let dr=-1;
-dr<=1;
-dr++
-){
-
-for(
-let dc=-1;
-dc<=1;
-dc++
-){
-
-if(
-dr||
-dc
-){
-
-add(
-r+dr,
-c+dc
-);
-
-}
-
-}
-
-}
-
-}
-
-return out;
-
-}
-
-function move(
-r1,
-c1,
-r2,
-c2
 ){
 
 history.push(
-clone(
+JSON.stringify(
 board
 )
 );
 
-let piece=
-board[r1][c1];
+board[r][c]=
 
-board[r2][c2]=
-piece;
-
-board[r1][c1]="";
-
-if(
-piece==="P"
-&&
-r2===0
-){
-
-board[r2][c2]="Q";
-
-}
-
-if(
-piece==="p"
-&&
-r2===7
-){
-
-board[r2][c2]="q";
-
-}
-
-}
-
-function click(
-r,
-c
-){
-
-if(
-selected
-){
-
-let moves=
-legal(
-selected[0],
+board[
+selected[0]
+][
 selected[1]
-);
+];
 
-let ok=
-moves.some(
-m=>
+board[
+selected[0]
+][
+selected[1]
+]="";
 
-m[0]===r&&
-m[1]===c
-
-);
-
-if(ok){
-
-move(
-
-selected[0],
-
-selected[1],
-
-r,
-
-c
-
-);
-
-selected=
-null;
+selected=null;
 
 draw();
 
 setTimeout(
-aiMove,
-100
+ai,
+300
 );
 
 return;
 
 }
 
-selected=
-null;
-
-draw();
-
-return;
-
-}
-
 if(
-white(
+isWhite(
 board[r][c]
 )
 ){
@@ -716,9 +313,9 @@ draw();
 
 }
 
-function allMoves(){
+function ai(){
 
-let list=[];
+let pieces=[];
 
 for(
 let r=0;
@@ -733,27 +330,16 @@ c++
 ){
 
 if(
-black(
+isBlack(
 board[r][c]
 )
 ){
 
-let m=
-legal(
+pieces.push(
+[
 r,
 c
-);
-
-m.forEach(
-x=>
-
-list.push([
-r,
-c,
-x[0],
-x[1]
-])
-
+]
 );
 
 }
@@ -762,92 +348,11 @@ x[1]
 
 }
 
-}
-
-return list;
-
-}
-function value(p){
-
-switch(
-p.toLowerCase()
-){
-
-case "p":
-return 10;
-
-case "n":
-return 30;
-
-case "b":
-return 30;
-
-case "r":
-return 50;
-
-case "q":
-return 90;
-
-case "k":
-return 900;
-
-default:
-return 0;
-
-}
-
-}
-
-function score(){
-
-let s=0;
-
-for(
-let r=0;
-r<8;
-r++
-){
-
-for(
-let c=0;
-c<8;
-c++
-){
-
-let p=
-board[r][c];
-
-if(!p)
-continue;
-
 if(
-black(p)
-)
-s+=
-value(p);
-
-else
-s-=
-value(p);
-
-}
-
-}
-
-return s;
-
-}
-
-function aiMove(){
-
-let moves=
-allMoves();
-
-if(
-!moves.length
+!pieces.length
 ){
 
-setStatus(
+status(
 "You win"
 );
 
@@ -855,115 +360,112 @@ return;
 
 }
 
-let level=
-Number(
-document
-.getElementById(
-"level"
+let p=
+pieces[
+Math.floor(
+Math.random()
+*
+pieces.length
 )
-.value
-);
+];
 
-let best=
-moves[0];
+let dirs=[
 
-let bestScore=
--99999;
+[-1,0],
+[1,0],
 
-for(
-let i=0;
-i<
+[0,-1],
+[0,1]
+
+];
+
+let d=
+dirs[
+Math.floor(
+Math.random()
+*
+dirs.length
+)
+];
+
+let nr=
+Math.max(
+0,
 Math.min(
-moves.length,
-level*10
-);
-i++
-){
-
-let m=
-moves[i];
-
-let copy=
-clone(
-board
+7,
+p[0]+d[0]
+)
 );
 
-move(
-m[0],
-m[1],
-m[2],
-m[3]
+let nc=
+Math.max(
+0,
+Math.min(
+7,
+p[1]+d[1]
+)
 );
 
-let sc=
-score();
+board[nr][nc]=
+board[
+p[0]
+][
+p[1]
+];
 
-board=
-copy;
-
-history.pop();
-
-if(
-sc>
-bestScore
-){
-
-bestScore=
-sc;
-
-best=
-m;
-
-}
-
-}
-
-move(
-best[0],
-best[1],
-best[2],
-best[3]
-);
+board[
+p[0]
+][
+p[1]
+]="";
 
 draw();
 
-setStatus(
+status(
 "Your turn"
 );
 
 }
 
-function undoMove(){
+function undo(){
 
 if(
 history.length
 ){
 
 board=
-history.pop();
-
-selected=
-null;
+JSON.parse(
+history.pop()
+);
 
 draw();
 
 }
+
+}
+
+function status(t){
+
+document
+.getElementById(
+"status"
+)
+.textContent=t;
 
 }
 
 function newGame(){
 
 board=
-startBoard();
+resetBoard();
+
+selected=null;
 
 history=[];
 
-selected=
-null;
-
 draw();
 
-setStatus(
+status(
 "Your turn"
 );
 
@@ -975,3 +477,4 @@ newGame();
 
 </body>
 </html>
+```
