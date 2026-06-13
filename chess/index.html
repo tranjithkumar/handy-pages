@@ -111,10 +111,7 @@ select option{background:#1e293b}
 </div>
 
 <script>
-document.getElementById('home-btn').addEventListener('click', function(){ window.location.href = '../index.html'; });
-document.getElementById('new-btn').addEventListener('click', function(){ newGame(); });
-document.getElementById('undo-btn').addEventListener('click', function(){ undoMove(); });
-document.getElementById('difficulty').addEventListener('change', function(){ newGame(); });
+
 
 const canvas = document.getElementById('board');
 const ctx    = canvas.getContext('2d');
@@ -498,6 +495,11 @@ function undoMove(){
     setStatus('Your turn');
     render();
 }
+
+document.getElementById('home-btn').addEventListener('click', function(){ window.location.href = '../index.html'; });
+document.getElementById('new-btn').addEventListener('click', function(){ newGame(); });
+document.getElementById('undo-btn').addEventListener('click', function(){ undoMove(); });
+document.getElementById('difficulty').addEventListener('change', function(){ newGame(); });
 
 newGame();
 resize();
