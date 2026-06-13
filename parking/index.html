@@ -1,21 +1,22 @@
+```html
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mini Truck Simulator</title>
+<title>Parking Game</title>
 
 <style>
-
-html,body{
+body{
 margin:0;
 overflow:hidden;
-background:#87ceeb;
+background:#222;
 font-family:Arial;
 }
 
 canvas{
 display:block;
+background:#5d5d5d;
 }
 
 #ui{
@@ -23,238 +24,145 @@ position:absolute;
 top:10px;
 left:10px;
 
+background:rgba(0,0,0,.7);
+
 color:white;
 
-background:rgba(0,0,0,.45);
-
-padding:12px;
+padding:10px;
 
 border-radius:10px;
-
-line-height:1.7;
 }
 
 button{
-
 padding:8px 12px;
-
+margin-top:8px;
 cursor:pointer;
-
 }
-
 </style>
 </head>
 
 <body>
 
-<canvas id="game"></canvas>
+<canvas id="g"></canvas>
 
 <div id="ui">
-
-<div>Speed: <span id="speed">0</span> km/h</div>
-
-<div>Distance: <span id="dist">0</span> km</div>
-
-<div>Cargo: <span id="cargo">100</span>%</div>
-
-<button onclick="resetGame()">
-Restart
-</button>
-
+<div>Arrow Keys / WASD</div>
+<div id="msg">Park inside the green box</div>
+<button onclick="reset()">Restart</button>
 </div>
 
 <script>
 
-const c=
-document
-.getElementById(
-"game"
-);
+const c=document.getElementById("g");
+const x=c.getContext("2d");
 
-const x=
-c.getContext(
-"2d"
-);
-
-function size(){
-
-c.width=
-innerWidth;
-
-c.height=
-innerHeight;
-
+function resize(){
+c.width=innerWidth;
+c.height=innerHeight;
 }
 
-size();
-
-addEventListener(
-"resize",
-size
-);
+resize();
+addEventListener("resize",resize);
 
 let keys={};
 
 addEventListener(
 "keydown",
-e=>keys[e.key]=1
+e=>keys[e.key]=true
 );
 
 addEventListener(
 "keyup",
-e=>keys[e.key]=0
+e=>keys[e.key]=false
 );
 
-let truck;
+let car;
+let target;
 
-let road;
+function reset(){
 
-let distance;
-
-let cargo;
-
-function resetGame(){
-
-truck={
-
-x:0,
-
-speed:0,
-
-angle:0
-
+car={
+x:120,
+y:c.height-140,
+a:-1.57,
+speed:0
 };
 
-road=0;
+target={
+x:c.width-220,
+y:120,
+w:120,
+h:180
+};
 
-distance=0;
-
-cargo=100;
+document
+.getElementById("msg")
+.textContent=
+"Park inside the green box";
 
 }
-
-resetGame();
 
 function update(){
 
-if(
-keys.ArrowUp||
-keys.w
-){
+if(keys.ArrowUp||keys.w)
+car.speed+=0.12;
 
-truck.speed+=.12;
+if(keys.ArrowDown||keys.s)
+car.speed-=0.08;
 
-}
+car.speed*=0.96;
 
-if(
-keys.ArrowDown||
-keys.s
-){
-
-truck.speed-=.18;
-
-}
-
-truck.speed*=.985;
-
-truck.speed=
+car.speed=
 Math.max(
--3,
+-2,
 Math.min(
-12,
-truck.speed
-)
-);
+5,
+car.speed
+));
 
-if(
-keys.ArrowLeft||
-keys.a
-){
+if(keys.ArrowLeft||keys.a)
+car.a-=0.05;
 
-truck.x-=
-3+
-truck.speed*.4;
+if(keys.ArrowRight||keys.d)
+car.a+=0.05;
 
-}
+car.x+=
+Math.cos(car.a)
+*
+car.speed;
 
-if(
-keys.ArrowRight||
-keys.d
-){
-
-truck.x+=
-3+
-truck.speed*.4;
+car.y+=
+Math.sin(car.a)
+*
+car.speed;
 
 }
 
-truck.x=
-Math.max(
--260,
-Math.min(
-260,
-truck.x
-)
-);
+function parked(){
 
-road+=
-truck.speed*6;
+let inside=
+car.x>
+target.x &&
+car.x<
+target.x+
+target.w &&
 
-distance+=
-Math.max(
-0,
-truck.speed
-)*0.02;
+car.y>
+target.y &&
+car.y<
+target.y+
+target.h;
 
-if(
+return inside &&
 Math.abs(
-truck.x
-)>180
-){
-
-cargo-=
-0.06*
-truck.speed;
+car.speed
+)<0.4;
 
 }
 
-cargo=
-Math.max(
-0,
-cargo
-);
+function drawLot(){
 
-document
-.getElementById(
-"speed"
-)
-.textContent=
-Math.round(
-truck.speed*10
-);
-
-document
-.getElementById(
-"dist"
-)
-.textContent=
-distance
-.toFixed(1);
-
-document
-.getElementById(
-"cargo"
-)
-.textContent=
-cargo
-.toFixed(0);
-
-}
-
-function drawRoad(){
-
-x.fillStyle=
-"#87ceeb";
+x.fillStyle="#7a7a7a";
 
 x.fillRect(
 0,
@@ -263,219 +171,105 @@ c.width,
 c.height
 );
 
-x.fillStyle=
-"#4b8b3b";
-
-x.fillRect(
-0,
-c.height*.45,
-c.width,
-c.height
-);
+x.strokeStyle="#ffffff";
 
 for(
-let y=
-c.height*.45;
-y<
-c.height;
-y+=8
+let i=0;
+i<10;
+i++
 ){
 
-let p=
-(y-
-c.height*.45)/
-(c.height*.55);
-
-let rw=
-150+
-p*900;
-
-let cx=
-c.width/2
-+
-truck.x*
-p;
-
-x.fillStyle=
-"#444";
-
-x.fillRect(
-
-cx-rw/2,
-
-y,
-
-rw,
-
-10
-
+x.strokeRect(
+60+i*140,
+80,
+100,
+180
 );
+
+}
 
 x.strokeStyle=
-"white";
+"#00ff55";
 
-x.lineWidth=
-3;
+x.lineWidth=5;
 
-if(
-Math.floor(
-(y+road)%60
-)<30
-){
-
-x.beginPath();
-
-x.moveTo(
-cx,
-y
+x.strokeRect(
+target.x,
+target.y,
+target.w,
+target.h
 );
 
-x.lineTo(
-cx,
-y+10
-);
-
-x.stroke();
-
 }
 
-}
-
-}
-
-function drawTruck(){
-
-let y=
-c.height*.78;
-
-let tx=
-c.width/2;
+function drawCar(){
 
 x.save();
 
 x.translate(
-tx,
-y
+car.x,
+car.y
+);
+
+x.rotate(
+car.a
 );
 
 x.fillStyle=
-"#d72626";
+"#e53935";
 
 x.fillRect(
--45,
--55,
-90,
-110
+-20,
+-35,
+40,
+70
 );
 
 x.fillStyle=
-"#ddd";
+"#cfd8dc";
 
 x.fillRect(
--32,
--42,
-64,
+-14,
+-20,
+28,
 28
 );
-
-x.fillStyle=
-"#222";
-
-x.fillRect(
--48,
--58,
-96,
-12
-);
-
-x.beginPath();
-
-x.arc(
--34,
-58,
-14,
-0,
-7
-);
-
-x.arc(
-34,
-58,
-14,
-0,
-7
-);
-
-x.fill();
 
 x.restore();
 
 }
 
-function draw(){
-
-drawRoad();
-
-drawTruck();
-
-if(
-cargo<=0
-){
-
-x.fillStyle=
-"rgba(0,0,0,.7)";
-
-x.fillRect(
-0,
-0,
-c.width,
-c.height
-);
-
-x.fillStyle=
-"white";
-
-x.font=
-"50px Arial";
-
-x.fillText(
-
-"Cargo Lost",
-
-c.width/2-140,
-
-c.height/2
-
-);
-
-x.font=
-"22px Arial";
-
-x.fillText(
-
-"Press Restart",
-
-c.width/2-85,
-
-c.height/2+45
-
-);
-
-return;
-
-}
+function loop(){
 
 update();
 
+drawLot();
+
+drawCar();
+
+if(parked()){
+
+document
+.getElementById(
+"msg"
+)
+.textContent=
+"Perfect Parking ✓";
+
+}
+
 requestAnimationFrame(
-draw
+loop
 );
 
 }
 
-draw();
+reset();
+
+loop();
 
 </script>
 
 </body>
 </html>
+```
