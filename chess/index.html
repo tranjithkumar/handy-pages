@@ -34,24 +34,12 @@ body{
 .back-btn:hover{background:rgba(255,255,255,0.15)}
 .title{font-size:18px;font-weight:bold;letter-spacing:.5px}
 .status-bar{font-size:13px;color:#94a3b8;min-width:100px;text-align:right}
-
-.board-wrap{
-    position:relative;
-    flex-shrink:0;
-}
-canvas{
-    display:block;
-    border-radius:4px;
-    cursor:pointer;
-}
-
+.board-wrap{position:relative;flex-shrink:0;}
+canvas{display:block;border-radius:4px;cursor:pointer;}
 .controls{
     margin-top:12px;
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    justify-content:center;
-    flex-shrink:0;
+    display:flex;gap:10px;flex-wrap:wrap;
+    justify-content:center;flex-shrink:0;
 }
 .ctrl-btn{
     background:rgba(255,255,255,0.08);
@@ -69,35 +57,25 @@ select{
 select option{background:#1e293b}
 .info{
     margin-top:10px;font-size:12px;
-    color:#475569;text-align:center;
-    flex-shrink:0;
+    color:#475569;text-align:center;flex-shrink:0;
 }
-
-/* Promotion modal */
 #promo-modal{
-    display:none;
-    position:fixed;inset:0;
-    background:rgba(0,0,0,0.7);
-    z-index:100;
+    display:none;position:fixed;inset:0;
+    background:rgba(0,0,0,0.7);z-index:100;
     align-items:center;justify-content:center;
 }
 #promo-modal.show{display:flex}
 .promo-box{
-    background:#1e293b;
-    border:1px solid #334155;
-    border-radius:10px;
-    padding:20px;
-    text-align:center;
+    background:#1e293b;border:1px solid #334155;
+    border-radius:10px;padding:20px;text-align:center;
 }
 .promo-box p{margin-bottom:12px;font-size:14px;color:#94a3b8}
 .promo-pieces{display:flex;gap:10px;justify-content:center}
 .promo-btn{
-    width:56px;height:56px;
-    font-size:36px;
+    width:56px;height:56px;font-size:36px;
     background:rgba(255,255,255,0.08);
-    border:1px solid #334155;
-    border-radius:8px;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;
+    border:1px solid #334155;border-radius:8px;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
 }
 .promo-btn:hover{background:rgba(255,255,255,0.18)}
 </style>
@@ -105,7 +83,7 @@ select option{background:#1e293b}
 <body>
 
 <div class="top-bar">
-    <button class="back-btn" onclick="location.href=\'../index.html\'">← Home</button>
+    <button class="back-btn" id="home-btn">← Home</button>
     <span class="title">♟ Chess</span>
     <span class="status-bar" id="status">Your turn</span>
 </div>
@@ -115,9 +93,9 @@ select option{background:#1e293b}
 </div>
 
 <div class="controls">
-    <button class="ctrl-btn" onclick="newGame()">New Game</button>
-    <button class="ctrl-btn" onclick="undoMove()">Undo</button>
-    <select id="difficulty" onchange="newGame()">
+    <button class="ctrl-btn" id="new-btn">New Game</button>
+    <button class="ctrl-btn" id="undo-btn">Undo</button>
+    <select id="difficulty">
         <option value="1">Easy</option>
         <option value="3" selected>Medium</option>
         <option value="5">Hard</option>
@@ -133,10 +111,14 @@ select option{background:#1e293b}
 </div>
 
 <script>
-// ── Canvas setup ─────────────────────────────────────────────
+document.getElementById('home-btn').addEventListener('click', function(){ window.location.href = '../index.html'; });
+document.getElementById('new-btn').addEventListener('click', function(){ newGame(); });
+document.getElementById('undo-btn').addEventListener('click', function(){ undoMove(); });
+document.getElementById('difficulty').addEventListener('change', function(){ newGame(); });
+
 const canvas = document.getElementById('board');
 const ctx    = canvas.getContext('2d');
-let SQ; // pixel size of one square — computed in resize()
+let SQ;
 
 function resize(){
     const maxW = Math.min(window.innerWidth - 32, 520);
@@ -150,72 +132,76 @@ function resize(){
     canvas.height = side;
     render();
 }
-
 window.addEventListener('resize', resize);
 
-// ── Piece glyphs ─────────────────────────────────────────────
 const GLYPH = {
     wK:'♔', wQ:'♕', wR:'♖', wB:'♗', wN:'♘', wP:'♙',
     bK:'♚', bQ:'♛', bR:'♜', bB:'♝', bN:'♞', bP:'♟'
 };
 
-// ── Game state ────────────────────────────────────────────────
 let board, turn, selected, legal, history, gameOver, thinking, pendingPromo;
+let lastFrom=-1, lastTo=-1;
 
-function sq(r,c){ return r*8+c }
-function rc(s)  { return {r:Math.floor(s/8), c:s%8} }
-function ok(r,c){ return r>=0&&r<8&&c>=0&&c<8 }
-function col(p) { return p?p[0]:null }
-function typ(p) { return p?p[1]:null }
+function SQi(r,c){ return r*8+c; }
+function RC(s){ return {r:Math.floor(s/8), c:s%8}; }
+function inb(r,c){ return r>=0&&r<8&&c>=0&&c<8; }
+function col(p){ return p?p[0]:null; }
+function typ(p){ return p?p[1]:null; }
 
-// ── Move generation ───────────────────────────────────────────
 function rawMoves(s, b){
-    const moves=[], p=b[s]; if(!p) return moves;
-    const {r,c}=rc(s), cl=col(p), op=cl==='w'?'b':'w', t=typ(p);
+    const moves=[], p=b[s];
+    if(!p) return moves;
+    const {r,c}=RC(s), cl=col(p), op=cl==='w'?'b':'w', t=typ(p);
 
     const slide=(dr,dc)=>{
         let nr=r+dr, nc=c+dc;
-        while(ok(nr,nc)){
-            const ts=sq(nr,nc);
-            if(!b[ts]){ moves.push(ts); } else { if(col(b[ts])===op) moves.push(ts); break; }
+        while(inb(nr,nc)){
+            const ts=SQi(nr,nc);
+            if(!b[ts]){ moves.push(ts); }
+            else{ if(col(b[ts])===op) moves.push(ts); break; }
             nr+=dr; nc+=dc;
         }
     };
 
     if(t==='P'){
         const d=cl==='w'?-1:1, sr=cl==='w'?6:1;
-        const f=sq(r+d,c);
-        if(ok(r+d,c)&&!b[f]){ moves.push(f); if(r===sr&&!b[sq(r+d*2,c)]) moves.push(sq(r+d*2,c)); }
-        [-1,1].forEach(dc=>{ if(ok(r+d,c+dc)&&col(b[sq(r+d,c+dc)])===op) moves.push(sq(r+d,c+dc)); });
-        // en passant
+        if(inb(r+d,c)&&!b[SQi(r+d,c)]){
+            moves.push(SQi(r+d,c));
+            if(r===sr&&!b[SQi(r+d*2,c)]) moves.push(SQi(r+d*2,c));
+        }
+        [-1,1].forEach(dc2=>{
+            if(inb(r+d,c+dc2)&&col(b[SQi(r+d,c+dc2)])===op) moves.push(SQi(r+d,c+dc2));
+        });
         if(history.length>0){
             const last=history[history.length-1];
-            if(last.piece[1]==='P'&&Math.abs(rc(last.from).r-rc(last.to).r)===2){
-                const epr=rc(last.to).r, epc=rc(last.to).c;
-                if(epr===r&&Math.abs(epc-c)===1) moves.push(sq(r+d,epc));
+            if(typ(last.piece)==='P'&&Math.abs(RC(last.from).r-RC(last.to).r)===2){
+                const epc=RC(last.to).c;
+                if(RC(last.to).r===r&&Math.abs(epc-c)===1) moves.push(SQi(r+d,epc));
             }
         }
     }
     if(t==='N'){
         [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc])=>{
-            if(ok(r+dr,c+dc)){ const ts=sq(r+dr,c+dc); if(col(b[ts])!==cl) moves.push(ts); }
+            if(inb(r+dr,c+dc)){
+                const ts=SQi(r+dr,c+dc);
+                if(col(b[ts])!==cl) moves.push(ts);
+            }
         });
     }
-    if(t==='B') [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([a,b2])=>slide(a,b2));
-    if(t==='R') [[-1,0],[1,0],[0,-1],[0,1]].forEach(([a,b2])=>slide(a,b2));
-    if(t==='Q') [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(([a,b2])=>slide(a,b2));
+    if(t==='B') [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([a,bb])=>slide(a,bb));
+    if(t==='R') [[-1,0],[1,0],[0,-1],[0,1]].forEach(([a,bb])=>slide(a,bb));
+    if(t==='Q') [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(([a,bb])=>slide(a,bb));
     if(t==='K'){
         [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc])=>{
-            if(ok(r+dr,c+dc)&&col(b[sq(r+dr,c+dc)])!==cl) moves.push(sq(r+dr,c+dc));
+            if(inb(r+dr,c+dc)&&col(b[SQi(r+dr,c+dc)])!==cl) moves.push(SQi(r+dr,c+dc));
         });
-        // castling
-        if(cl==='w'&&r===7&&!inCheck(b,'w')){
-            if(b[sq(7,7)]==='wR'&&!b[sq(7,6)]&&!b[sq(7,5)]&&c===4) moves.push(sq(7,6));
-            if(b[sq(7,0)]==='wR'&&!b[sq(7,1)]&&!b[sq(7,2)]&&!b[sq(7,3)]&&c===4) moves.push(sq(7,2));
+        if(cl==='w'&&r===7&&c===4&&!isInCheck(b,'w')){
+            if(b[SQi(7,7)]==='wR'&&!b[SQi(7,6)]&&!b[SQi(7,5)]) moves.push(SQi(7,6));
+            if(b[SQi(7,0)]==='wR'&&!b[SQi(7,1)]&&!b[SQi(7,2)]&&!b[SQi(7,3)]) moves.push(SQi(7,2));
         }
-        if(cl==='b'&&r===0&&!inCheck(b,'b')){
-            if(b[sq(0,7)]==='bR'&&!b[sq(0,6)]&&!b[sq(0,5)]&&c===4) moves.push(sq(0,6));
-            if(b[sq(0,0)]==='bR'&&!b[sq(0,1)]&&!b[sq(0,2)]&&!b[sq(0,3)]&&c===4) moves.push(sq(0,2));
+        if(cl==='b'&&r===0&&c===4&&!isInCheck(b,'b')){
+            if(b[SQi(0,7)]==='bR'&&!b[SQi(0,6)]&&!b[SQi(0,5)]) moves.push(SQi(0,6));
+            if(b[SQi(0,0)]==='bR'&&!b[SQi(0,1)]&&!b[SQi(0,2)]&&!b[SQi(0,3)]) moves.push(SQi(0,2));
         }
     }
     return moves;
@@ -223,130 +209,132 @@ function rawMoves(s, b){
 
 function kingOf(b,cl){ for(let i=0;i<64;i++) if(b[i]===cl+'K') return i; return -1; }
 
-function inCheck(b,cl){
+function isInCheck(b,cl){
     const k=kingOf(b,cl), op=cl==='w'?'b':'w';
-    for(let i=0;i<64;i++) if(col(b[i])===op && rawMoves(i,b).includes(k)) return true;
+    for(let i=0;i<64;i++) if(col(b[i])===op&&rawMoves(i,b).includes(k)) return true;
     return false;
 }
 
-function apply(b,from,to){
-    const nb=[...b], p=nb[from]; nb[to]=p; nb[from]=null;
-    const {r,c}=rc(to);
-    // en passant capture
-    if(typ(p)==='P'&&c!==rc(from).c&&!nb[to]){ /* already moved */ }
-    if(typ(p)==='P'&&c!==rc(from).c){
-        // captured via en passant — remove captured pawn
-        const cap=sq(rc(from).r, c);
-        nb[cap]=null;
+function applyMove(b,from,to){
+    const nb=[...b], p=nb[from];
+    nb[to]=p; nb[from]=null;
+    const fc=RC(from).c, tc2=RC(to).c, tr=RC(to).r;
+    if(typ(p)==='P'&&fc!==tc2&&!nb[to]){
+        nb[SQi(RC(from).r, tc2)]=null;
     }
-    // castling rook
     if(typ(p)==='K'){
-        if(to===sq(7,6)&&from===sq(7,4)){ nb[sq(7,5)]=nb[sq(7,7)]; nb[sq(7,7)]=null; }
-        if(to===sq(7,2)&&from===sq(7,4)){ nb[sq(7,3)]=nb[sq(7,0)]; nb[sq(7,0)]=null; }
-        if(to===sq(0,6)&&from===sq(0,4)){ nb[sq(0,5)]=nb[sq(0,7)]; nb[sq(0,7)]=null; }
-        if(to===sq(0,2)&&from===sq(0,4)){ nb[sq(0,3)]=nb[sq(0,0)]; nb[sq(0,0)]=null; }
+        if(from===SQi(7,4)&&to===SQi(7,6)){ nb[SQi(7,5)]=nb[SQi(7,7)]; nb[SQi(7,7)]=null; }
+        if(from===SQi(7,4)&&to===SQi(7,2)){ nb[SQi(7,3)]=nb[SQi(7,0)]; nb[SQi(7,0)]=null; }
+        if(from===SQi(0,4)&&to===SQi(0,6)){ nb[SQi(0,5)]=nb[SQi(0,7)]; nb[SQi(0,7)]=null; }
+        if(from===SQi(0,4)&&to===SQi(0,2)){ nb[SQi(0,3)]=nb[SQi(0,0)]; nb[SQi(0,0)]=null; }
     }
     return nb;
 }
 
-function legalMoves(s, b, t){
+function legalMoves(s,b){
+    const cl=col(b[s]);
+    if(!cl) return [];
     return rawMoves(s,b).filter(to=>{
-        const nb=apply(b,s,to);
-        return !inCheck(nb, col(b[s]));
+        const nb=applyMove(b,s,to);
+        return !isInCheck(nb,cl);
     });
 }
 
-function hasAny(b,t){ for(let i=0;i<64;i++) if(col(b[i])===t&&legalMoves(i,b,t).length>0) return true; return false; }
+function hasAnyMoves(b,cl){
+    for(let i=0;i<64;i++) if(col(b[i])===cl&&legalMoves(i,b).length>0) return true;
+    return false;
+}
 
-// ── AI ────────────────────────────────────────────────────────
+// AI
 const VAL={P:100,N:320,B:330,R:500,Q:900,K:20000};
-const PAWN_TBL=[
- 0,  0,  0,  0,  0,  0,  0,  0,
-50, 50, 50, 50, 50, 50, 50, 50,
-10, 10, 20, 30, 30, 20, 10, 10,
- 5,  5, 10, 25, 25, 10,  5,  5,
- 0,  0,  0, 20, 20,  0,  0,  0,
- 5, -5,-10,  0,  0,-10, -5,  5,
- 5, 10, 10,-20,-20, 10, 10,  5,
- 0,  0,  0,  0,  0,  0,  0,  0
+const PAWN_PST=[
+ 0, 0, 0, 0, 0, 0, 0, 0,
+50,50,50,50,50,50,50,50,
+10,10,20,30,30,20,10,10,
+ 5, 5,10,25,25,10, 5, 5,
+ 0, 0, 0,20,20, 0, 0, 0,
+ 5,-5,-10,0, 0,-10,-5, 5,
+ 5,10,10,-20,-20,10,10, 5,
+ 0, 0, 0, 0, 0, 0, 0, 0
 ];
 
-function score(b){
+function scoreBoard(b){
     let s=0;
     for(let i=0;i<64;i++){
         if(!b[i]) continue;
-        const cl=col(b[i]), t=typ(b[i]), v=VAL[t]||0;
-        let bonus=0;
-        if(t==='P') bonus = cl==='w' ? PAWN_TBL[63-i] : PAWN_TBL[i];
-        s += cl==='w' ? -(v+bonus) : (v+bonus);
+        const cl=col(b[i]), t=typ(b[i]);
+        const v=(VAL[t]||0)+(t==='P'?(cl==='w'?PAWN_PST[63-i]:PAWN_PST[i]):0);
+        s+=cl==='b'?v:-v;
     }
     return s;
 }
 
 function minimax(b,depth,alpha,beta,maxing){
-    if(depth===0) return score(b);
-    const t=maxing?'b':'w';
+    if(depth===0) return scoreBoard(b);
+    const cl=maxing?'b':'w';
     const moves=[];
-    for(let i=0;i<64;i++) if(col(b[i])===t) legalMoves(i,b,t).forEach(to=>moves.push([i,to]));
-    if(!moves.length) return maxing ? -20000 : 20000;
+    for(let i=0;i<64;i++) if(col(b[i])===cl) legalMoves(i,b).forEach(to=>moves.push([i,to]));
+    if(!moves.length) return maxing?-20000:20000;
     if(maxing){
         let best=-Infinity;
-        for(const[f,t2] of moves){ best=Math.max(best,minimax(apply(b,f,t2),depth-1,alpha,beta,false)); alpha=Math.max(alpha,best); if(beta<=alpha) break; }
+        for(const[f,t] of moves){
+            best=Math.max(best,minimax(applyMove(b,f,t),depth-1,alpha,beta,false));
+            alpha=Math.max(alpha,best);
+            if(beta<=alpha) break;
+        }
         return best;
     } else {
         let best=Infinity;
-        for(const[f,t2] of moves){ best=Math.min(best,minimax(apply(b,f,t2),depth-1,alpha,beta,true)); beta=Math.min(beta,best); if(beta<=alpha) break; }
+        for(const[f,t] of moves){
+            best=Math.min(best,minimax(applyMove(b,f,t),depth-1,alpha,beta,true));
+            beta=Math.min(beta,best);
+            if(beta<=alpha) break;
+        }
         return best;
     }
 }
 
-function bestMove(b,depth){
+function getBestMove(b,depth){
     const moves=[];
-    for(let i=0;i<64;i++) if(col(b[i])==='b') legalMoves(i,b,'b').forEach(to=>moves.push([i,to]));
+    for(let i=0;i<64;i++) if(col(b[i])==='b') legalMoves(i,b).forEach(to=>moves.push([i,to]));
     if(!moves.length) return null;
     let best=-Infinity, bm=null;
     for(const[f,t] of moves){
-        const s=minimax(apply(b,f,t),depth-1,-Infinity,Infinity,false);
-        if(s>best){ best=s; bm=[f,t]; }
+        const sc=minimax(applyMove(b,f,t),depth-1,-Infinity,Infinity,false);
+        if(sc>best){ best=sc; bm=[f,t]; }
     }
     return bm;
 }
 
-// ── Rendering ─────────────────────────────────────────────────
+// Render
 const LIGHT='#f0d9b5', DARK='#b58863';
-const SEL_L='#aed565', SEL_D='#90b336';
-const LEGAL_L='rgba(0,0,0,0.15)', LEGAL_D='rgba(0,0,0,0.25)';
-const CHECK='#e74c3c';
-
-let lastFrom=-1, lastTo=-1;
 
 function render(){
-    if(!board) return;
+    if(!board||!SQ) return;
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    const chkKing = inCheck(board,turn) ? kingOf(board,turn) : -1;
+    const chkKing=isInCheck(board,turn)?kingOf(board,turn):-1;
 
     for(let i=0;i<64;i++){
-        const {r,c}=rc(i);
+        const {r,c}=RC(i);
         const x=c*SQ, y=r*SQ;
-        const isLight=(r+c)%2===0;
+        const light=(r+c)%2===0;
 
-        // square colour
-        let bg = isLight ? LIGHT : DARK;
-        if(i===selected)        bg = isLight ? SEL_L : SEL_D;
-        else if(i===lastFrom||i===lastTo) bg = isLight ? '#cdd26a' : '#aaa23a';
-        if(i===chkKing)         bg = CHECK;
+        let bg=light?LIGHT:DARK;
+        if(i===selected) bg=light?'#aed565':'#90b336';
+        else if(i===lastFrom||i===lastTo) bg=light?'#cdd26a':'#aaa23a';
+        if(i===chkKing) bg='#e74c3c';
+
         ctx.fillStyle=bg;
         ctx.fillRect(x,y,SQ,SQ);
 
-        // legal dot / capture ring
         if(legal.includes(i)){
             if(!board[i]){
-                ctx.fillStyle=isLight ? LEGAL_L : LEGAL_D;
+                ctx.fillStyle='rgba(0,0,0,0.18)';
                 ctx.beginPath();
                 ctx.arc(x+SQ/2,y+SQ/2,SQ*0.16,0,Math.PI*2);
                 ctx.fill();
             } else {
-                ctx.strokeStyle=isLight ? LEGAL_L : LEGAL_D;
+                ctx.strokeStyle='rgba(0,0,0,0.25)';
                 ctx.lineWidth=SQ*0.09;
                 ctx.beginPath();
                 ctx.arc(x+SQ/2,y+SQ/2,SQ*0.44,0,Math.PI*2);
@@ -354,98 +342,94 @@ function render(){
             }
         }
 
-        // piece
         if(board[i]){
-            ctx.font=`${SQ*0.78}px serif`;
+            ctx.font=SQ*0.78+'px serif';
             ctx.textAlign='center';
             ctx.textBaseline='middle';
-            // shadow for visibility
-            ctx.fillStyle='rgba(0,0,0,0.35)';
-            ctx.fillText(GLYPH[board[i]], x+SQ/2+1, y+SQ/2+2);
+            ctx.fillStyle='rgba(0,0,0,0.3)';
+            ctx.fillText(GLYPH[board[i]],x+SQ/2+1,y+SQ/2+2);
             ctx.fillStyle='#fff';
-            ctx.fillText(GLYPH[board[i]], x+SQ/2, y+SQ/2+1);
+            ctx.fillText(GLYPH[board[i]],x+SQ/2,y+SQ/2+1);
         }
 
-        // rank/file labels on edges
-        ctx.font=`bold ${SQ*0.17}px Arial`;
-        ctx.textBaseline='top';
+        ctx.font='bold '+Math.round(SQ*0.17)+'px Arial';
         if(c===0){
-            ctx.fillStyle=isLight?DARK:LIGHT;
-            ctx.textAlign='left';
-            ctx.fillText(8-r, x+2, y+2);
+            ctx.textBaseline='top'; ctx.textAlign='left';
+            ctx.fillStyle=light?DARK:LIGHT;
+            ctx.fillText(8-r,x+2,y+2);
         }
         if(r===7){
-            ctx.fillStyle=isLight?DARK:LIGHT;
-            ctx.textAlign='right';
-            ctx.fillText('abcdefgh'[c], x+SQ-2, y+SQ-SQ*0.2);
+            ctx.textBaseline='bottom'; ctx.textAlign='right';
+            ctx.fillStyle=light?DARK:LIGHT;
+            ctx.fillText('abcdefgh'[c],x+SQ-2,y+SQ-2);
         }
     }
 }
 
-// ── Input ─────────────────────────────────────────────────────
-canvas.addEventListener('click', e=>{
+// Input
+canvas.addEventListener('click', function(e){
     if(gameOver||thinking||turn!=='w') return;
     const rect=canvas.getBoundingClientRect();
     const c=Math.floor((e.clientX-rect.left)/SQ);
     const r=Math.floor((e.clientY-rect.top)/SQ);
-    const s=sq(r,c);
-    handleClick(s);
+    handleSq(SQi(r,c));
 });
 
-function handleClick(s){
+function handleSq(s){
     if(selected===null){
         if(!board[s]||col(board[s])!=='w') return;
         selected=s;
-        legal=legalMoves(s,board,'w');
+        legal=legalMoves(s,board);
         render();
         return;
     }
     if(legal.includes(s)){
-        doMove('w', selected, s);
+        doMove('w',selected,s);
     } else {
         selected=null; legal=[];
-        if(board[s]&&col(board[s])==='w'){ selected=s; legal=legalMoves(s,board,'w'); }
+        if(board[s]&&col(board[s])==='w'){
+            selected=s;
+            legal=legalMoves(s,board);
+        }
         render();
     }
 }
 
-function doMove(cl, from, to, promoChoice){
+function doMove(cl,from,to,promoChoice){
     const p=board[from];
-    const isPromo = typ(p)==='P' && (rc(to).r===0||rc(to).r===7);
-
-    if(isPromo && !promoChoice){
-        pendingPromo={from,to};
-        showPromoModal(cl);
+    const promoRow=cl==='w'?0:7;
+    const isPromo=typ(p)==='P'&&RC(to).r===promoRow;
+    if(isPromo&&!promoChoice){
+        pendingPromo={from,to,cl};
+        showPromo(cl);
         return;
     }
-
-    history.push({board:[...board], from, to, piece:p});
-    board = apply(board,from,to);
-    if(isPromo) board[to] = cl+(promoChoice||'Q');
-
+    history.push({board:[...board],from,to,piece:p});
+    board=applyMove(board,from,to);
+    if(isPromo) board[to]=cl+(promoChoice||'Q');
     lastFrom=from; lastTo=to;
     selected=null; legal=[];
-    turn = cl==='w'?'b':'w';
+    turn=cl==='w'?'b':'w';
     render();
     checkEnd();
-    if(!gameOver && turn==='b') doAI();
+    if(!gameOver&&turn==='b') doAI();
 }
 
-function showPromoModal(cl){
-    const pieces = cl==='w'
-        ? [{k:'Q',g:'♕'},{k:'R',g:'♖'},{k:'B',g:'♗'},{k:'N',g:'♘'}]
-        : [{k:'Q',g:'♛'},{k:'R',g:'♜'},{k:'B',g:'♝'},{k:'N',g:'♞'}];
+function showPromo(cl){
+    const defs=cl==='w'
+        ?[{k:'Q',g:'♕'},{k:'R',g:'♖'},{k:'B',g:'♗'},{k:'N',g:'♘'}]
+        :[{k:'Q',g:'♛'},{k:'R',g:'♜'},{k:'B',g:'♝'},{k:'N',g:'♞'}];
     const box=document.getElementById('promo-pieces');
     box.innerHTML='';
-    pieces.forEach(({k,g})=>{
-        const b=document.createElement('button');
-        b.className='promo-btn';
-        b.textContent=g;
-        b.onclick=()=>{
+    defs.forEach(function(d){
+        const btn=document.createElement('button');
+        btn.className='promo-btn';
+        btn.textContent=d.g;
+        btn.addEventListener('click',function(){
             document.getElementById('promo-modal').classList.remove('show');
-            doMove(cl, pendingPromo.from, pendingPromo.to, k);
-        };
-        box.appendChild(b);
+            doMove(pendingPromo.cl,pendingPromo.from,pendingPromo.to,d.k);
+        });
+        box.appendChild(btn);
     });
     document.getElementById('promo-modal').classList.add('show');
 }
@@ -454,8 +438,8 @@ function doAI(){
     thinking=true;
     setStatus('Thinking...');
     const depth=parseInt(document.getElementById('difficulty').value);
-    setTimeout(()=>{
-        const mv=bestMove(board,depth);
+    setTimeout(function(){
+        const mv=getBestMove(board,depth);
         if(mv) doMove('b',mv[0],mv[1]);
         thinking=false;
         turn='w';
@@ -466,34 +450,35 @@ function doAI(){
 }
 
 function checkEnd(){
-    const t=turn;
-    if(!hasAny(board,t)){
+    if(!hasAnyMoves(board,turn)){
         gameOver=true;
-        if(inCheck(board,t)){
-            const w=t==='w'?'Black wins 🏴':'You win! ♟';
-            setStatus(w);
-            document.getElementById('info').textContent=w+' — Checkmate!';
+        if(isInCheck(board,turn)){
+            const msg=turn==='w'?'Black wins!':'You win! ♟';
+            setStatus(msg);
+            document.getElementById('info').textContent=msg+' Checkmate!';
         } else {
             setStatus('Draw');
-            document.getElementById('info').textContent='Stalemate — it\'s a draw!';
+            document.getElementById('info').textContent='Stalemate — draw!';
         }
-    } else if(inCheck(board,t)){
-        setStatus(t==='w'?'Check! Your turn':'Check...');
+    } else if(isInCheck(board,turn)){
+        setStatus(turn==='w'?'Check! Your turn':'Check...');
+    } else {
+        if(turn==='w') setStatus('Your turn');
     }
 }
 
 function setStatus(t){ document.getElementById('status').textContent=t; }
 
-// ── New game / undo ───────────────────────────────────────────
 function newGame(){
     board=Array(64).fill(null);
-    ['R','N','B','Q','K','B','N','R'].forEach((p,i)=>{
-        board[i]   ='b'+p;
-        board[8+i] ='bP';
+    ['R','N','B','Q','K','B','N','R'].forEach(function(p,i){
+        board[i]='b'+p;
+        board[8+i]='bP';
         board[48+i]='wP';
         board[56+i]='w'+p;
     });
-    turn='w'; selected=null; legal=[]; history=[]; gameOver=false; thinking=false;
+    turn='w'; selected=null; legal=[];
+    history=[]; gameOver=false; thinking=false;
     lastFrom=-1; lastTo=-1; pendingPromo=null;
     document.getElementById('promo-modal').classList.remove('show');
     setStatus('Your turn');
@@ -503,23 +488,19 @@ function newGame(){
 
 function undoMove(){
     if(!history.length||thinking) return;
-    // undo AI move too
-    if(history.length>=2 && turn==='w'){
-        history.pop(); history.pop();
-    } else if(history.length>=1){
-        history.pop();
-    }
-    const last=history.length ? history[history.length-1] : null;
-    if(last){ board=[...last.board]; lastFrom=last.from; lastTo=last.to; }
-    else { newGame(); return; }
+    if(turn==='w'&&history.length>=2){ history.pop(); history.pop(); }
+    else if(history.length>=1){ history.pop(); }
+    if(history.length===0){ newGame(); return; }
+    const last=history[history.length-1];
+    board=[...last.board];
+    lastFrom=last.from; lastTo=last.to;
     turn='w'; selected=null; legal=[]; gameOver=false;
     setStatus('Your turn');
     render();
 }
 
-// ── Boot ──────────────────────────────────────────────────────
 newGame();
 resize();
 </script>
 </body>
-  </html>
+</html>
