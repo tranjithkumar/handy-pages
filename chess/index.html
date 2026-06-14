@@ -5,535 +5,312 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chess — RK Pages</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-    background:#0f172a;
-    color:white;
-    font-family:Arial,sans-serif;
-    min-height:100vh;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    padding:12px 16px 20px;
-}
-.top-bar{
-    width:100%;
-    max-width:560px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-bottom:12px;
-}
-.back-btn{
-    background:rgba(255,255,255,0.08);
-    border:none;color:white;
-    padding:6px 14px;border-radius:6px;
-    cursor:pointer;font-size:13px;
-}
-.back-btn:hover{background:rgba(255,255,255,0.15)}
-.title{font-size:18px;font-weight:bold}
-.status-bar{font-size:13px;color:#94a3b8;min-width:90px;text-align:right}
-canvas{
-    display:block;
-    border-radius:4px;
-    cursor:pointer;
-    touch-action:none;
-}
-.controls{
-    margin-top:14px;
-    display:flex;gap:10px;flex-wrap:wrap;
-    justify-content:center;
-}
-.ctrl-btn{
-    background:rgba(255,255,255,0.08);
-    border:none;color:white;
-    padding:9px 22px;border-radius:6px;
-    cursor:pointer;font-size:14px;font-weight:bold;
-}
-.ctrl-btn:hover{background:rgba(255,255,255,0.18)}
-select{
-    background:rgba(255,255,255,0.08);
-    border:1px solid #334155;color:white;
-    padding:9px 12px;border-radius:6px;
-    font-size:14px;cursor:pointer;
-}
-select option{background:#1e293b}
-.info{
-    margin-top:10px;font-size:12px;
-    color:#475569;text-align:center;
-}
-#promo-modal{
-    display:none;position:fixed;inset:0;
-    background:rgba(0,0,0,0.75);z-index:100;
-    align-items:center;justify-content:center;
-}
-#promo-modal.show{display:flex}
-.promo-box{
-    background:#1e293b;border:1px solid #334155;
-    border-radius:10px;padding:24px;text-align:center;
-}
-.promo-box p{margin-bottom:14px;font-size:14px;color:#94a3b8}
-.promo-pieces{display:flex;gap:12px;justify-content:center}
-.promo-btn{
-    width:60px;height:60px;font-size:40px;
-    background:rgba(255,255,255,0.08);
-    border:1px solid #334155;border-radius:8px;
-    cursor:pointer;display:flex;align-items:center;justify-content:center;
-}
-.promo-btn:hover{background:rgba(255,255,255,0.2)}
+body { margin: 0; background: #0f172a; color: white; font-family: Arial, sans-serif; text-align: center; padding: 12px; }
+.bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; max-width: 400px; margin-left: auto; margin-right: auto; }
+button { background: rgba(255,255,255,0.1); border: none; color: white; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; margin: 4px; }
+select { background: rgba(255,255,255,0.1); border: 1px solid #444; color: white; padding: 8px 12px; border-radius: 6px; font-size: 14px; }
+#msg { font-size: 14px; color: #94a3b8; margin: 8px 0; min-height: 20px; }
+table { border-collapse: collapse; margin: 0 auto; }
+td { width: 12vw; height: 12vw; max-width: 46px; max-height: 46px; text-align: center; vertical-align: middle; font-size: 7.5vw; cursor: pointer; line-height: 1; user-select: none; position: relative; }
+@media (min-width: 400px) { td { font-size: 30px; } }
+.l { background: #f0d9b5; }
+.d { background: #b58863; }
+.sel { background: #aed565 !important; }
+.mov { background: #cdd26a !important; }
+.chk { background: #e74c3c !important; }
+.dot::after { content: ''; display: block; width: 30%; height: 30%; border-radius: 50%; background: rgba(0,0,0,0.22); margin: auto; position: absolute; top: 35%; left: 35%; }
+.ring { box-shadow: inset 0 0 0 4px rgba(0,0,0,0.25); }
+#promo { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 99; }
+#promo.on { display: flex; }
+#promo > div { background: #1e293b; border-radius: 10px; padding: 20px; }
+#promo p { color: #94a3b8; margin-bottom: 12px; }
+#promo button { font-size: 32px; width: 54px; height: 54px; padding: 0; }
 </style>
 </head>
 <body>
 
-<div class="top-bar">
-    <button class="back-btn" id="home-btn">← Home</button>
-    <span class="title">♟ Chess</span>
-    <span class="status-bar" id="status">Your turn</span>
+<div class="bar">
+  <button id="homeBtn">← Home</button>
+  <b>♟ Chess</b>
+  <span id="st">Your turn</span>
 </div>
 
-<canvas id="board"></canvas>
-
-<div class="controls">
-    <button class="ctrl-btn" id="new-btn">New Game</button>
-    <button class="ctrl-btn" id="undo-btn">Undo</button>
-    <select id="difficulty">
-        <option value="1">Easy</option>
-        <option value="3" selected>Medium</option>
-        <option value="5">Hard</option>
-    </select>
+<div style="margin-bottom:8px">
+  <button id="newBtn">New Game</button>
+  <button id="undoBtn">Undo</button>
+  <select id="lv"><option value="1">Easy</option><option value="2" selected>Medium</option><option value="3">Hard</option></select>
 </div>
-<p class="info" id="info">Tap a piece to select · tap destination to move</p>
 
-<div id="promo-modal">
-    <div class="promo-box">
-        <p>Promote pawn to:</p>
-        <div class="promo-pieces" id="promo-pieces"></div>
-    </div>
+<div id="msg">Tap a piece to select</div>
+<table id="bd"></table>
+
+<div id="promo">
+  <div>
+    <p>Promote to:</p>
+    <div id="pp"></div>
+  </div>
 </div>
 
 <script>
-var canvas = document.getElementById('board');
-var ctx = canvas.getContext('2d');
-var SQ = 0;
-
-// Size the board: take 92% of the narrower screen dimension, snap to 8
-function resize() {
-    var size = Math.floor(Math.min(window.innerWidth * 0.92, window.innerHeight * 0.58) / 8) * 8;
-    if (size < 240) size = 240;
-    SQ = size / 8;
-    canvas.width  = size;
-    canvas.height = size;
-    render();
-}
-window.addEventListener('resize', resize);
-
-var GLYPH = {
-    wK:'♔', wQ:'♕', wR:'♖', wB:'♗', wN:'♘', wP:'♙',
-    bK:'♚', bQ:'♛', bR:'♜', bB:'♝', bN:'♞', bP:'♟'
+var G = {
+  board: [], turn: 'w', sel: -1, legal: [], hist: [], over: false, busy: false,
+  lastF: -1, lastT: -1, prom: null
 };
 
-var board, turn, selected, legal, history, gameOver, thinking, pendingPromo;
-var lastFrom = -1, lastTo = -1;
+var GL = {wK:'\u2654',wQ:'\u2655',wR:'\u2656',wB:'\u2657',wN:'\u2658',wP:'\u2659',bK:'\u265A',bQ:'\u265B',bR:'\u265C',bB:'\u265D',bN:'\u265E',bP:'\u265F'};
 
-function SQi(r, c) { return r * 8 + c; }
-function RC(s)     { return { r: Math.floor(s / 8), c: s % 8 }; }
-function inb(r, c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
-function col(p)    { return p ? p[0] : null; }
-function typ(p)    { return p ? p[1] : null; }
+function r(i){ return Math.floor(i/8); }
+function c(i){ return i%8; }
+function idx(row,col){ return row*8+col; }
+function ok(row,col){ return row>=0&&row<8&&col>=0&&col<8; }
+function cl(p){ return p?p[0]:null; }
+function ty(p){ return p?p[1]:null; }
 
-function rawMoves(s, b) {
-    var moves = [], p = b[s];
-    if (!p) return moves;
-    var pos = RC(s), r = pos.r, c = pos.c;
-    var cl = col(p), op = cl === 'w' ? 'b' : 'w', t = typ(p);
-
-    function slide(dr, dc) {
-        var nr = r + dr, nc = c + dc;
-        while (inb(nr, nc)) {
-            var ts = SQi(nr, nc);
-            if (!b[ts]) { moves.push(ts); }
-            else { if (col(b[ts]) === op) moves.push(ts); break; }
-            nr += dr; nc += dc;
-        }
+// rawAttacks: generates moves WITHOUT castling. Used purely for check detection.
+// This avoids recursion: chk() calls rawAttacks(), and rawAttacks() never calls chk().
+function rawAttacks(i, b){
+  var mv=[], p=b[i]; if(!p) return mv;
+  var row=r(i), col2=c(i), color=cl(p), opp=color==='w'?'b':'w', type=ty(p);
+  function slide(dr,dc){
+    var nr=row+dr,nc=col2+dc;
+    while(ok(nr,nc)){
+      var t=idx(nr,nc);
+      if(!b[t]){ mv.push(t); }
+      else { if(cl(b[t])===opp) mv.push(t); break; }
+      nr+=dr; nc+=dc;
     }
-
-    if (t === 'P') {
-        var d = cl === 'w' ? -1 : 1, sr = cl === 'w' ? 6 : 1;
-        if (inb(r+d, c) && !b[SQi(r+d, c)]) {
-            moves.push(SQi(r+d, c));
-            if (r === sr && !b[SQi(r+d*2, c)]) moves.push(SQi(r+d*2, c));
-        }
-        [-1, 1].forEach(function(dc2) {
-            if (inb(r+d, c+dc2) && col(b[SQi(r+d, c+dc2)]) === op) moves.push(SQi(r+d, c+dc2));
-        });
-        if (history.length > 0) {
-            var last = history[history.length - 1];
-            if (typ(last.piece) === 'P' && Math.abs(RC(last.from).r - RC(last.to).r) === 2) {
-                var epc = RC(last.to).c;
-                if (RC(last.to).r === r && Math.abs(epc - c) === 1) moves.push(SQi(r+d, epc));
-            }
-        }
+  }
+  if(type==='P'){
+    var d=color==='w'?-1:1, sr=color==='w'?6:1;
+    if(ok(row+d,col2)&&!b[idx(row+d,col2)]){
+      mv.push(idx(row+d,col2));
+      if(row===sr&&!b[idx(row+d*2,col2)]) mv.push(idx(row+d*2,col2));
     }
-    if (t === 'N') {
-        [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(function(v) {
-            if (inb(r+v[0], c+v[1])) {
-                var ts = SQi(r+v[0], c+v[1]);
-                if (col(b[ts]) !== cl) moves.push(ts);
-            }
-        });
-    }
-    if (t === 'B') { [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(function(v){slide(v[0],v[1]);}); }
-    if (t === 'R') { [[-1,0],[1,0],[0,-1],[0,1]].forEach(function(v){slide(v[0],v[1]);}); }
-    if (t === 'Q') { [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(function(v){slide(v[0],v[1]);}); }
-    if (t === 'K') {
-        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(function(v) {
-            if (inb(r+v[0], c+v[1]) && col(b[SQi(r+v[0], c+v[1])]) !== cl) moves.push(SQi(r+v[0], c+v[1]));
-        });
-        if (cl === 'w' && r === 7 && c === 4 && !isInCheck(b, 'w')) {
-            if (b[SQi(7,7)] === 'wR' && !b[SQi(7,6)] && !b[SQi(7,5)]) moves.push(SQi(7,6));
-            if (b[SQi(7,0)] === 'wR' && !b[SQi(7,1)] && !b[SQi(7,2)] && !b[SQi(7,3)]) moves.push(SQi(7,2));
-        }
-        if (cl === 'b' && r === 0 && c === 4 && !isInCheck(b, 'b')) {
-            if (b[SQi(0,7)] === 'bR' && !b[SQi(0,6)] && !b[SQi(0,5)]) moves.push(SQi(0,6));
-            if (b[SQi(0,0)] === 'bR' && !b[SQi(0,1)] && !b[SQi(0,2)] && !b[SQi(0,3)]) moves.push(SQi(0,2));
-        }
-    }
-    return moves;
-}
-
-function kingOf(b, cl) {
-    for (var i = 0; i < 64; i++) if (b[i] === cl + 'K') return i;
-    return -1;
-}
-
-function isInCheck(b, cl) {
-    var k = kingOf(b, cl), op = cl === 'w' ? 'b' : 'w';
-    for (var i = 0; i < 64; i++) {
-        if (col(b[i]) === op && rawMoves(i, b).indexOf(k) !== -1) return true;
-    }
-    return false;
-}
-
-function applyMove(b, from, to) {
-    var nb = b.slice(), p = nb[from];
-    nb[to] = p; nb[from] = null;
-    var fc = RC(from).c, tc = RC(to).c, fr = RC(from).r;
-    // en passant
-    if (typ(p) === 'P' && fc !== tc && !nb[to]) { nb[SQi(fr, tc)] = null; }
-    // castling
-    if (typ(p) === 'K') {
-        if (from === SQi(7,4) && to === SQi(7,6)) { nb[SQi(7,5)] = nb[SQi(7,7)]; nb[SQi(7,7)] = null; }
-        if (from === SQi(7,4) && to === SQi(7,2)) { nb[SQi(7,3)] = nb[SQi(7,0)]; nb[SQi(7,0)] = null; }
-        if (from === SQi(0,4) && to === SQi(0,6)) { nb[SQi(0,5)] = nb[SQi(0,7)]; nb[SQi(0,7)] = null; }
-        if (from === SQi(0,4) && to === SQi(0,2)) { nb[SQi(0,3)] = nb[SQi(0,0)]; nb[SQi(0,0)] = null; }
-    }
-    return nb;
-}
-
-function legalMoves(s, b) {
-    var cl = col(b[s]);
-    if (!cl) return [];
-    return rawMoves(s, b).filter(function(to) {
-        return !isInCheck(applyMove(b, s, to), cl);
+    [-1,1].forEach(function(dc){
+      if(ok(row+d,col2+dc)&&cl(b[idx(row+d,col2+dc)])===opp) mv.push(idx(row+d,col2+dc));
     });
+    if(G.hist.length){
+      var L=G.hist[G.hist.length-1];
+      if(ty(L.p)==='P'&&Math.abs(r(L.f)-r(L.t))===2&&r(L.t)===row&&Math.abs(c(L.t)-col2)===1) mv.push(idx(row+d,c(L.t)));
+    }
+  }
+  if(type==='N'){
+    [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(function(v){
+      if(ok(row+v[0],col2+v[1])){ var t=idx(row+v[0],col2+v[1]); if(cl(b[t])!==color) mv.push(t); }
+    });
+  }
+  if(type==='B'){[[-1,-1],[-1,1],[1,-1],[1,1]].forEach(function(v){slide(v[0],v[1]);});}
+  if(type==='R'){[[-1,0],[1,0],[0,-1],[0,1]].forEach(function(v){slide(v[0],v[1]);});}
+  if(type==='Q'){[[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(function(v){slide(v[0],v[1]);});}
+  if(type==='K'){
+    [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(function(v){
+      if(ok(row+v[0],col2+v[1])&&cl(b[idx(row+v[0],col2+v[1])])!==color) mv.push(idx(row+v[0],col2+v[1]));
+    });
+  }
+  return mv;
 }
 
-function hasAnyMoves(b, cl) {
-    for (var i = 0; i < 64; i++) if (col(b[i]) === cl && legalMoves(i, b).length > 0) return true;
-    return false;
+// raw: full move list INCLUDING castling. Used for actual move generation.
+function raw(i, b){
+  var mv = rawAttacks(i, b);
+  var p=b[i]; if(!p) return mv;
+  var row=r(i), col2=c(i), color=cl(p), type=ty(p);
+  if(type==='K'){
+    if(color==='w'&&row===7&&col2===4&&!chk(b,'w')){
+      if(b[63]==='wR'&&!b[61]&&!b[62]) mv.push(62);
+      if(b[56]==='wR'&&!b[57]&&!b[58]&&!b[59]) mv.push(58);
+    }
+    if(color==='b'&&row===0&&col2===4&&!chk(b,'b')){
+      if(b[7]==='bR'&&!b[5]&&!b[6]) mv.push(6);
+      if(b[0]==='bR'&&!b[1]&&!b[2]&&!b[3]) mv.push(2);
+    }
+  }
+  return mv;
 }
+
+function king(b,color){ for(var i=0;i<64;i++) if(b[i]===color+'K') return i; return -1; }
+
+// chk: only uses rawAttacks — never calls raw() — so no recursion possible.
+function chk(b,color){
+  var k=king(b,color), op=color==='w'?'b':'w';
+  for(var i=0;i<64;i++) if(cl(b[i])===op && rawAttacks(i,b).indexOf(k)!==-1) return true;
+  return false;
+}
+
+function mov(b,f,t){
+  var nb=b.slice(),p=nb[f]; nb[t]=p; nb[f]=null;
+  if(ty(p)==='P'&&c(f)!==c(t)&&!nb[t]) nb[idx(r(f),c(t))]=null;
+  if(ty(p)==='K'){
+    if(f===60&&t===62){nb[61]=nb[63];nb[63]=null;}
+    if(f===60&&t===58){nb[59]=nb[56];nb[56]=null;}
+    if(f===4&&t===6){nb[5]=nb[7];nb[7]=null;}
+    if(f===4&&t===2){nb[3]=nb[0];nb[0]=null;}
+  }
+  return nb;
+}
+
+function legal(i,b){
+  var color=cl(b[i]); if(!color) return [];
+  return raw(i,b).filter(function(t){ return !chk(mov(b,i,t),color); });
+}
+function anyMoves(b,color){ for(var i=0;i<64;i++) if(cl(b[i])===color&&legal(i,b).length>0) return true; return false; }
 
 // AI
-var VAL = { P:100, N:320, B:330, R:500, Q:900, K:20000 };
-var PAWN_PST = [
-     0,  0,  0,  0,  0,  0,  0,  0,
-    50, 50, 50, 50, 50, 50, 50, 50,
-    10, 10, 20, 30, 30, 20, 10, 10,
-     5,  5, 10, 25, 25, 10,  5,  5,
-     0,  0,  0, 20, 20,  0,  0,  0,
-     5, -5,-10,  0,  0,-10, -5,  5,
-     5, 10, 10,-20,-20, 10, 10,  5,
-     0,  0,  0,  0,  0,  0,  0,  0
-];
-
-function scoreBoard(b) {
-    var s = 0;
-    for (var i = 0; i < 64; i++) {
-        if (!b[i]) continue;
-        var cl = col(b[i]), t = typ(b[i]);
-        var v = (VAL[t] || 0) + (t === 'P' ? (cl === 'w' ? PAWN_PST[63-i] : PAWN_PST[i]) : 0);
-        s += cl === 'b' ? v : -v;
+var VAL={P:100,N:320,B:330,R:500,Q:900,K:20000};
+function eval2(b){ var s=0; for(var i=0;i<64;i++){ if(!b[i]) continue; s+=(VAL[ty(b[i])]||0)*(cl(b[i])==='b'?1:-1); } return s; }
+function mm(b,d,a,be,mx){
+  if(d===0) return eval2(b);
+  var color=mx?'b':'w', ms=[];
+  for(var i=0;i<64;i++) if(cl(b[i])===color) legal(i,b).forEach(function(t){ms.push([i,t]);});
+  if(!ms.length) return mx?-20000:20000;
+  if(mx){
+    var best=-Infinity;
+    for(var m=0;m<ms.length;m++){
+      best=Math.max(best,mm(mov(b,ms[m][0],ms[m][1]),d-1,a,be,false));
+      a=Math.max(a,best); if(be<=a) break;
     }
-    return s;
+    return best;
+  } else {
+    var best2=Infinity;
+    for(var m2=0;m2<ms.length;m2++){
+      best2=Math.min(best2,mm(mov(b,ms[m2][0],ms[m2][1]),d-1,a,be,true));
+      be=Math.min(be,best2); if(be<=a) break;
+    }
+    return best2;
+  }
+}
+function aiMove(b,d){
+  var ms=[],best=-Infinity,bm=null;
+  for(var i=0;i<64;i++) if(cl(b[i])==='b') legal(i,b).forEach(function(t){ms.push([i,t]);});
+  ms.forEach(function(m){
+    var s=mm(mov(b,m[0],m[1]),d-1,-Infinity,Infinity,false);
+    if(s>best){best=s;bm=m;}
+  });
+  return bm;
 }
 
-function minimax(b, depth, alpha, beta, maxing) {
-    if (depth === 0) return scoreBoard(b);
-    var cl = maxing ? 'b' : 'w';
-    var moves = [];
-    for (var i = 0; i < 64; i++) if (col(b[i]) === cl) legalMoves(i, b).forEach(function(to){ moves.push([i, to]); });
-    if (!moves.length) return maxing ? -20000 : 20000;
-    if (maxing) {
-        var best = -Infinity;
-        for (var m = 0; m < moves.length; m++) {
-            best = Math.max(best, minimax(applyMove(b, moves[m][0], moves[m][1]), depth-1, alpha, beta, false));
-            alpha = Math.max(alpha, best);
-            if (beta <= alpha) break;
-        }
-        return best;
+function init(){
+  var back=['R','N','B','Q','K','B','N','R'];
+  G.board=Array(64).fill(null);
+  for(var i=0;i<8;i++){ G.board[i]='b'+back[i]; G.board[8+i]='bP'; G.board[48+i]='wP'; G.board[56+i]='w'+back[i]; }
+  G.turn='w'; G.sel=-1; G.legal=[]; G.hist=[]; G.over=false; G.busy=false; G.lastF=-1; G.lastT=-1; G.prom=null;
+  document.getElementById('promo').classList.remove('on');
+  st('Your turn');
+  document.getElementById('msg').textContent='Tap a piece to select';
+  draw();
+}
+
+function draw(){
+  var bd=document.getElementById('bd'), html='', chkK=chk(G.board,G.turn)?king(G.board,G.turn):-1;
+  for(var row=0;row<8;row++){
+    html+='<tr>';
+    for(var col2=0;col2<8;col2++){
+      var i=idx(row,col2), base=(row+col2)%2===0?'l':'d', cls=[base];
+      if(i===G.sel) cls=['sel'];
+      else if(i===G.lastF||i===G.lastT) cls=[base,'mov'];
+      if(i===chkK) cls=[base,'chk'];
+      var isLegal=G.legal.indexOf(i)!==-1;
+      if(isLegal&&!G.board[i]) cls.push('dot');
+      if(isLegal&&G.board[i]) cls.push('ring');
+      var piece=G.board[i]?GL[G.board[i]]:'';
+      html+='<td class="'+cls.join(' ')+'" data-i="'+i+'">'+piece+'</td>';
+    }
+    html+='</tr>';
+  }
+  bd.innerHTML=html;
+}
+
+function tap(i){
+  if(G.over||G.busy||G.turn!=='w') return;
+  if(G.sel===-1){
+    if(!G.board[i]||cl(G.board[i])!=='w') return;
+    G.sel=i; G.legal=legal(i,G.board); draw(); return;
+  }
+  if(G.legal.indexOf(i)!==-1){ doMove('w',G.sel,i); return; }
+  G.sel=-1; G.legal=[];
+  if(G.board[i]&&cl(G.board[i])==='w'){ G.sel=i; G.legal=legal(i,G.board); }
+  draw();
+}
+
+function doMove(color,f,t,promo){
+  var p=G.board[f], promoRow=color==='w'?0:7, isProm=ty(p)==='P'&&r(t)===promoRow;
+  if(isProm&&!promo){ G.prom={f:f,t:t,color:color}; showPromo(color); return; }
+  G.hist.push({board:G.board.slice(),f:f,t:t,p:p});
+  G.board=mov(G.board,f,t);
+  if(isProm) G.board[t]=color+(promo||'Q');
+  G.lastF=f; G.lastT=t; G.sel=-1; G.legal=[];
+  G.turn=color==='w'?'b':'w';
+  draw(); end();
+  if(!G.over&&G.turn==='b') doAI();
+}
+
+function showPromo(color){
+  var defs=color==='w'
+    ?[{k:'Q',g:'\u2655'},{k:'R',g:'\u2656'},{k:'B',g:'\u2657'},{k:'N',g:'\u2658'}]
+    :[{k:'Q',g:'\u265B'},{k:'R',g:'\u265C'},{k:'B',g:'\u265D'},{k:'N',g:'\u265E'}];
+  var pp=document.getElementById('pp'); pp.innerHTML='';
+  defs.forEach(function(d){
+    var btn=document.createElement('button');
+    btn.textContent=d.g;
+    btn.addEventListener('click',function(){
+      document.getElementById('promo').classList.remove('on');
+      doMove(G.prom.color,G.prom.f,G.prom.t,d.k);
+    });
+    pp.appendChild(btn);
+  });
+  document.getElementById('promo').classList.add('on');
+}
+
+function doAI(){
+  G.busy=true; st('Thinking...');
+  var d=parseInt(document.getElementById('lv').value);
+  setTimeout(function(){
+    var m=aiMove(G.board,d);
+    if(m) doMove('b',m[0],m[1]);
+    G.busy=false; G.turn='w'; draw(); end();
+    if(!G.over) st('Your turn');
+  },30);
+}
+
+function end(){
+  if(!anyMoves(G.board,G.turn)){
+    G.over=true;
+    if(chk(G.board,G.turn)){
+      var msg=G.turn==='w'?'Black wins!':'You win!';
+      st(msg); document.getElementById('msg').textContent=msg+' Checkmate!';
     } else {
-        var best2 = Infinity;
-        for (var m2 = 0; m2 < moves.length; m2++) {
-            best2 = Math.min(best2, minimax(applyMove(b, moves[m2][0], moves[m2][1]), depth-1, alpha, beta, true));
-            beta = Math.min(beta, best2);
-            if (beta <= alpha) break;
-        }
-        return best2;
+      st('Draw'); document.getElementById('msg').textContent='Stalemate!';
     }
+  } else if(chk(G.board,G.turn)){
+    st(G.turn==='w'?'Check! Your turn':'Check...');
+  }
 }
 
-function getBestMove(b, depth) {
-    var moves = [];
-    for (var i = 0; i < 64; i++) if (col(b[i]) === 'b') legalMoves(i, b).forEach(function(to){ moves.push([i, to]); });
-    if (!moves.length) return null;
-    var best = -Infinity, bm = null;
-    for (var m = 0; m < moves.length; m++) {
-        var sc = minimax(applyMove(b, moves[m][0], moves[m][1]), depth-1, -Infinity, Infinity, false);
-        if (sc > best) { best = sc; bm = moves[m]; }
-    }
-    return bm;
+function undo(){
+  if(!G.hist.length||G.busy) return;
+  if(G.turn==='w'&&G.hist.length>=2){ G.hist.pop(); G.hist.pop(); }
+  else if(G.hist.length>=1){ G.hist.pop(); }
+  if(!G.hist.length){ init(); return; }
+  var last=G.hist[G.hist.length-1];
+  G.board=last.board.slice(); G.lastF=last.f; G.lastT=last.t;
+  G.turn='w'; G.sel=-1; G.legal=[]; G.over=false; G.busy=false;
+  st('Your turn'); draw();
 }
 
-// Render
-var LIGHT = '#f0d9b5', DARK = '#b58863';
+function st(t){ document.getElementById('st').textContent=t; }
 
-function render() {
-    if (!board || !SQ) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    var chkKing = isInCheck(board, turn) ? kingOf(board, turn) : -1;
-
-    for (var i = 0; i < 64; i++) {
-        var pos = RC(i), r = pos.r, c = pos.c;
-        var x = c * SQ, y = r * SQ;
-        var light = (r + c) % 2 === 0;
-
-        var bg = light ? LIGHT : DARK;
-        if (i === selected)            bg = light ? '#aed565' : '#90b336';
-        else if (i === lastFrom || i === lastTo) bg = light ? '#cdd26a' : '#aaa23a';
-        if (i === chkKing)             bg = '#e74c3c';
-
-        ctx.fillStyle = bg;
-        ctx.fillRect(x, y, SQ, SQ);
-
-        if (legal.indexOf(i) !== -1) {
-            if (!board[i]) {
-                ctx.fillStyle = 'rgba(0,0,0,0.2)';
-                ctx.beginPath();
-                ctx.arc(x + SQ/2, y + SQ/2, SQ * 0.17, 0, Math.PI * 2);
-                ctx.fill();
-            } else {
-                ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-                ctx.lineWidth = SQ * 0.09;
-                ctx.beginPath();
-                ctx.arc(x + SQ/2, y + SQ/2, SQ * 0.44, 0, Math.PI * 2);
-                ctx.stroke();
-            }
-        }
-
-        if (board[i]) {
-            ctx.font = Math.round(SQ * 0.75) + 'px serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = 'rgba(0,0,0,0.28)';
-            ctx.fillText(GLYPH[board[i]], x + SQ/2 + 1, y + SQ/2 + 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(GLYPH[board[i]], x + SQ/2, y + SQ/2 + 1);
-        }
-
-        // coordinates
-        ctx.font = 'bold ' + Math.round(SQ * 0.18) + 'px Arial';
-        if (c === 0) {
-            ctx.textBaseline = 'top'; ctx.textAlign = 'left';
-            ctx.fillStyle = light ? DARK : LIGHT;
-            ctx.fillText(8 - r, x + 2, y + 2);
-        }
-        if (r === 7) {
-            ctx.textBaseline = 'bottom'; ctx.textAlign = 'right';
-            ctx.fillStyle = light ? DARK : LIGHT;
-            ctx.fillText('abcdefgh'[c], x + SQ - 2, y + SQ - 2);
-        }
-    }
-}
-
-// Click / touch input
-function getSquare(e) {
-    var rect = canvas.getBoundingClientRect();
-    var cx, cy;
-    if (e.touches) {
-        cx = e.touches[0].clientX - rect.left;
-        cy = e.touches[0].clientY - rect.top;
-    } else {
-        cx = e.clientX - rect.left;
-        cy = e.clientY - rect.top;
-    }
-    var c = Math.floor(cx / SQ);
-    var r = Math.floor(cy / SQ);
-    if (r < 0 || r > 7 || c < 0 || c > 7) return -1;
-    return SQi(r, c);
-}
-
-canvas.addEventListener('click', function(e) {
-    if (gameOver || thinking || turn !== 'w') return;
-    var s = getSquare(e);
-    if (s === -1) return;
-    handleSq(s);
+// Wire events
+document.getElementById('homeBtn').addEventListener('click', function(){ window.location.href='../index.html'; });
+document.getElementById('newBtn').addEventListener('click', init);
+document.getElementById('undoBtn').addEventListener('click', undo);
+document.getElementById('bd').addEventListener('click', function(e){
+  var td = e.target.closest('td');
+  if(!td) return;
+  var i = parseInt(td.getAttribute('data-i'));
+  tap(i);
 });
 
-canvas.addEventListener('touchend', function(e) {
-    e.preventDefault();
-    if (gameOver || thinking || turn !== 'w') return;
-    var rect = canvas.getBoundingClientRect();
-    var t = e.changedTouches[0];
-    var c = Math.floor((t.clientX - rect.left) / SQ);
-    var r = Math.floor((t.clientY - rect.top) / SQ);
-    if (r < 0 || r > 7 || c < 0 || c > 7) return;
-    handleSq(SQi(r, c));
-}, { passive: false });
-
-function handleSq(s) {
-    if (selected === null) {
-        if (!board[s] || col(board[s]) !== 'w') return;
-        selected = s;
-        legal = legalMoves(s, board);
-        render();
-        return;
-    }
-    if (legal.indexOf(s) !== -1) {
-        doMove('w', selected, s);
-    } else {
-        selected = null; legal = [];
-        if (board[s] && col(board[s]) === 'w') {
-            selected = s;
-            legal = legalMoves(s, board);
-        }
-        render();
-    }
-}
-
-function doMove(cl, from, to, promoChoice) {
-    var p = board[from];
-    var promoRow = cl === 'w' ? 0 : 7;
-    var isPromo = typ(p) === 'P' && RC(to).r === promoRow;
-    if (isPromo && !promoChoice) {
-        pendingPromo = { from: from, to: to, cl: cl };
-        showPromo(cl);
-        return;
-    }
-    history.push({ board: board.slice(), from: from, to: to, piece: p });
-    board = applyMove(board, from, to);
-    if (isPromo) board[to] = cl + (promoChoice || 'Q');
-    lastFrom = from; lastTo = to;
-    selected = null; legal = [];
-    turn = cl === 'w' ? 'b' : 'w';
-    render();
-    checkEnd();
-    if (!gameOver && turn === 'b') doAI();
-}
-
-function showPromo(cl) {
-    var defs = cl === 'w'
-        ? [{k:'Q',g:'♕'},{k:'R',g:'♖'},{k:'B',g:'♗'},{k:'N',g:'♘'}]
-        : [{k:'Q',g:'♛'},{k:'R',g:'♜'},{k:'B',g:'♝'},{k:'N',g:'♞'}];
-    var box = document.getElementById('promo-pieces');
-    box.innerHTML = '';
-    defs.forEach(function(d) {
-        var btn = document.createElement('button');
-        btn.className = 'promo-btn';
-        btn.textContent = d.g;
-        btn.addEventListener('click', function() {
-            document.getElementById('promo-modal').classList.remove('show');
-            doMove(pendingPromo.cl, pendingPromo.from, pendingPromo.to, d.k);
-        });
-        box.appendChild(btn);
-    });
-    document.getElementById('promo-modal').classList.add('show');
-}
-
-function doAI() {
-    thinking = true;
-    setStatus('Thinking...');
-    var depth = parseInt(document.getElementById('difficulty').value);
-    setTimeout(function() {
-        var mv = getBestMove(board, depth);
-        if (mv) doMove('b', mv[0], mv[1]);
-        thinking = false;
-        turn = 'w';
-        render();
-        checkEnd();
-        if (!gameOver) setStatus('Your turn');
-    }, 30);
-}
-
-function checkEnd() {
-    if (!hasAnyMoves(board, turn)) {
-        gameOver = true;
-        if (isInCheck(board, turn)) {
-            var msg = turn === 'w' ? 'Black wins!' : 'You win! ♟';
-            setStatus(msg);
-            document.getElementById('info').textContent = msg + ' Checkmate!';
-        } else {
-            setStatus('Draw');
-            document.getElementById('info').textContent = 'Stalemate — draw!';
-        }
-    } else if (isInCheck(board, turn)) {
-        setStatus(turn === 'w' ? 'Check! Your turn' : 'Check...');
-    } else {
-        if (turn === 'w') setStatus('Your turn');
-    }
-}
-
-function setStatus(t) { document.getElementById('status').textContent = t; }
-
-function newGame() {
-    board = Array(64).fill(null);
-    var back = ['R','N','B','Q','K','B','N','R'];
-    for (var i = 0; i < 8; i++) {
-        board[i]    = 'b' + back[i];
-        board[8+i]  = 'bP';
-        board[48+i] = 'wP';
-        board[56+i] = 'w' + back[i];
-    }
-    turn = 'w'; selected = null; legal = [];
-    history = []; gameOver = false; thinking = false;
-    lastFrom = -1; lastTo = -1; pendingPromo = null;
-    document.getElementById('promo-modal').classList.remove('show');
-    setStatus('Your turn');
-    document.getElementById('info').textContent = 'Tap a piece to select · tap destination to move';
-    render();
-}
-
-function undoMove() {
-    if (!history.length || thinking) return;
-    if (turn === 'w' && history.length >= 2) { history.pop(); history.pop(); }
-    else { history.pop(); }
-    if (history.length === 0) { newGame(); return; }
-    var last = history[history.length - 1];
-    board = last.board.slice();
-    lastFrom = last.from; lastTo = last.to;
-    turn = 'w'; selected = null; legal = []; gameOver = false;
-    setStatus('Your turn');
-    render();
-}
-
-// Wire buttons
-document.getElementById('home-btn').addEventListener('click', function() { window.location.href = '../index.html'; });
-document.getElementById('new-btn').addEventListener('click', function() { newGame(); });
-document.getElementById('undo-btn').addEventListener('click', function() { undoMove(); });
-document.getElementById('difficulty').addEventListener('change', function() { newGame(); });
-
-// Boot
-newGame();
-resize();
+init();
 </script>
 </body>
-    </html>
+</html>
