@@ -4,138 +4,461 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SWING</title>
-
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-body {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-    background: #111827;
-    color: white;
-}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-h2 {
-    margin-bottom: 15px;
-}
+  :root {
+    --navy:     #050D1A;
+    --card:     #0A1628;
+    --card2:    #0F1E36;
+    --border:   #1a2d4a;
+    --border2:  #243d5e;
+    --cyan:     #00D4F0;
+    --cyan-dim: #006480;
+    --amber:    #F59E0B;
+    --green:    #10B981;
+    --red:      #EF4444;
+    --slate:    #94A3B8;
+    --slate2:   #64748B;
+    --white:    #F0F6FF;
+    --muted:    #4B6080;
+  }
 
-.status {
-    margin-bottom: 15px;
-    color: #9ca3af;
-}
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--navy);
+    color: var(--white);
+    min-height: 100vh;
+    padding: 0;
+  }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
-}
+  /* ── header ── */
+  .header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
 
-th, td {
-    border: 1px solid #374151;
-    padding: 10px;
-    text-align: left;
-}
+  .header-left { display: flex; align-items: center; gap: 16px; }
 
-th {
-    background: #1f2937;
-}
+  .logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--cyan);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
 
-tr:nth-child(even) {
-    background: #1a2332;
-}
+  .signal-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,212,240,0.08);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 20px;
+    padding: 3px 10px 3px 8px;
+    font-size: 11px;
+    color: var(--cyan);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
 
-button {
-    margin-top: 20px;
-    padding: 10px 15px;
-    cursor: pointer;
-}
+  .pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  .week-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+
+  .back-link {
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.05em;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 6px 12px;
+    transition: all 0.15s;
+  }
+  .back-link:hover { color: var(--white); background: var(--card2); }
+
+  /* ── stats bar ── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-cell {
+    background: var(--card);
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value.cyan  { color: var(--cyan); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.green { color: var(--green); }
+
+  .stat-sub {
+    font-size: 10px;
+    color: var(--slate2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── column header ── */
+  .grid-header {
+    display: grid;
+    grid-template-columns: 26px 120px 90px 74px 74px 90px 80px;
+    gap: 0;
+    padding: 8px 28px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .col-head {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  /* ── rows ── */
+  .rows-container {
+    overflow-y: auto;
+    max-height: calc(100vh - 220px);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 26px 120px 90px 74px 74px 90px 80px;
+    gap: 0;
+    padding: 0 28px;
+    border-bottom: 1px solid rgba(26,45,74,0.6);
+    align-items: center;
+    min-height: 50px;
+    transition: background 0.1s;
+  }
+  .row:hover { background: var(--card2); }
+  .row.gc   { border-left: 2px solid var(--cyan); }
+  .row.bull { border-left: 2px solid var(--green); }
+
+  .cell {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--white);
+    padding: 0 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* signal dot */
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-gc   { background: var(--cyan); }
+  .dot-bull { background: var(--green); }
+  .dot-none { background: var(--muted); }
+
+  /* ticker */
+  .ticker-sym {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 0.04em;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.06em;
+    margin-left: 5px;
+    vertical-align: middle;
+  }
+  .badge-gc   { background: rgba(0,212,240,0.12); color: var(--cyan);  border: 1px solid rgba(0,212,240,0.25); }
+  .badge-bull { background: rgba(16,185,129,0.12); color: var(--green); border: 1px solid rgba(16,185,129,0.25); }
+  .badge-top  { background: rgba(245,158,11,0.14); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .neu { color: var(--slate); }
+
+  /* RSI bar */
+  .rsi-wrap { display: flex; align-items: center; gap: 6px; }
+  .rsi-track {
+    width: 38px; height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .rsi-fill { height: 100%; border-radius: 2px; }
+
+  /* strike chip */
+  .strike {
+    background: var(--card2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    color: var(--amber);
+    font-weight: 600;
+  }
+
+  /* empty / error */
+  .msg {
+    padding: 60px 28px;
+    text-align: center;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+  }
+  .msg.err { color: var(--red); }
+
+  /* legend */
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 28px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-sep  { width: 1px; height: 12px; background: var(--border2); }
+  .status-txt  { margin-left: auto; }
+  .status-txt .cnt { color: var(--white); font-weight: 600; }
+
+  @keyframes rowIn {
+    from { opacity: 0; transform: translateX(-4px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .row { animation: rowIn 0.15s ease both; }
 </style>
 </head>
-
 <body>
 
-<h2>SWING</h2>
+<header class="header">
+  <div class="header-left">
+    <div class="logo">⚡ SWING</div>
+    <div class="signal-badge"><div class="pulse-dot"></div> WEEKLY</div>
+    <span class="week-label" id="weekLabel"></span>
+  </div>
+  <a class="back-link" href="../index.html">← Back</a>
+</header>
 
-<div id="status" class="status">
-Loading...
+<div class="stats-bar">
+  <div class="stat-cell">
+    <div class="stat-label">Golden Cross</div>
+    <div class="stat-value cyan"  id="statGC">—</div>
+    <div class="stat-sub">50 &gt; 200 MA</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-label">Bullish Picks</div>
+    <div class="stat-value amber" id="statBull">—</div>
+    <div class="stat-sub">100-vector</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-label">Avg RSI</div>
+    <div class="stat-value"       id="statRSI">—</div>
+    <div class="stat-sub">momentum</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-label">Avg 1M Return</div>
+    <div class="stat-value green" id="statRet">—</div>
+    <div class="stat-sub">swing return</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-label">Total Picks</div>
+    <div class="stat-value"       id="statTotal">—</div>
+    <div class="stat-sub">this scan</div>
+  </div>
 </div>
 
-<table>
-<thead>
-<tr>
-    <th>Symbol</th>
-    <th>Close</th>
-    <th>1M %</th>
-    <th>RSI</th>
-    <th>52W Gap %</th>
-    <th>OTM CE</th>
-</tr>
-</thead>
+<div class="legend">
+  <span class="legend-item"><span class="dot dot-gc"></span>   Golden cross</span>
+  <span class="legend-item"><span class="dot dot-bull"></span> Bullish vector</span>
+  <span class="legend-item"><span class="dot dot-none"></span> Watching</span>
+  <span class="legend-sep"></span>
+  <span>50 / 200 MA · 100-vector · swing / weekly</span>
+  <span class="status-txt" id="statusTxt">Loading…</span>
+</div>
 
-<tbody id="results">
-<tr>
-    <td colspan="6">Loading...</td>
-</tr>
-</tbody>
-</table>
+<div class="grid-header">
+  <div class="col-head"></div>
+  <div class="col-head">Symbol</div>
+  <div class="col-head">Close</div>
+  <div class="col-head">1M %</div>
+  <div class="col-head">RSI</div>
+  <div class="col-head">52W Gap</div>
+  <div class="col-head">OTM Call</div>
+</div>
 
-<button onclick="location.href='../index.html'">
-Back
-</button>
+<div class="rows-container" id="rowsContainer">
+  <div class="msg">Loading…</div>
+</div>
 
 <script>
+  function getWeekLabel() {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const mon = new Date(now);
+    mon.setDate(now.getDate() + diffToMon);
+    const fri = new Date(mon);
+    fri.setDate(mon.getDate() + 4);
+    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return fmt(mon) + ' – ' + fmt(fri);
+  }
 
-async function loadSwing() {
+  function rsiColor(v) {
+    if (v > 70) return '#F59E0B';
+    if (v >= 50) return '#10B981';
+    return '#94A3B8';
+  }
 
+  function classifyRow(stock) {
+    const chg = parseFloat(stock.monthly_change);
+    const rsi = parseFloat(stock.rsi);
+    const gc   = chg >= 5  && rsi >= 55 && rsi <= 75;
+    const bull = chg >= 0  && rsi >= 50 && !gc;
+    return gc ? 'gc' : bull ? 'bull' : '';
+  }
+
+  function updateStats(data) {
+    const gc    = data.filter(d => classifyRow(d) === 'gc').length;
+    const bull  = data.filter(d => classifyRow(d) === 'bull').length;
+    const avgRSI = (data.reduce((s,d) => s + parseFloat(d.rsi), 0) / data.length).toFixed(1);
+    const avgRet = (data.reduce((s,d) => s + parseFloat(d.monthly_change), 0) / data.length).toFixed(1);
+    document.getElementById('statGC').textContent    = gc;
+    document.getElementById('statBull').textContent  = bull;
+    document.getElementById('statRSI').textContent   = avgRSI;
+    document.getElementById('statRet').textContent   = (avgRet >= 0 ? '+' : '') + avgRet + '%';
+    document.getElementById('statTotal').textContent = data.length;
+  }
+
+  async function loadSwing() {
     try {
+      document.getElementById('weekLabel').textContent = getWeekLabel();
 
-        const url = "../data/swing.json?v=" + Date.now(); // 🔥 CACHE FIX
+      const url = "../data/swing.json?v=" + Date.now(); // 🔥 cache fix
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const data = await response.json();
 
-        const response = await fetch(url);
+      const container = document.getElementById('rowsContainer');
+      const statusTxt = document.getElementById('statusTxt');
 
-        if (!response.ok) {
-            throw new Error("HTTP Error " + response.status);
-        }
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="msg">No candidates this week — check back after next scan.</div>';
+        statusTxt.textContent = '0 picks';
+        return;
+      }
 
-        const data = await response.json();
+      statusTxt.innerHTML = '<span class="cnt">' + data.length + '</span> candidate' + (data.length !== 1 ? 's' : '');
+      updateStats(data);
 
-        const status = document.getElementById("status");
-        const tbody = document.getElementById("results");
+      container.innerHTML = data.map((stock, i) => {
+        const chg    = parseFloat(stock.monthly_change);
+        const rsi    = parseFloat(stock.rsi);
+        const gap    = parseFloat(stock.high_gap);
+        const cls    = classifyRow(stock);
+        const chgTxt = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+        const chgCls = chg >= 0 ? 'pos' : 'neg';
+        const rc     = rsiColor(rsi);
+        const rsiFill= Math.min(100, rsi) + '%';
+        const gapCls = gap < 8 ? 'amber' : 'neu';
+        const dotCls = cls === 'gc' ? 'dot-gc' : cls === 'bull' ? 'dot-bull' : 'dot-none';
+        const badge  = cls === 'gc'
+          ? '<span class="badge badge-gc">GC</span>'
+          : cls === 'bull'
+          ? '<span class="badge badge-bull">BULL</span>'
+          : '';
 
-        status.innerText = `${data.length} candidate(s) found`;
+        return `<div class="row ${cls}" style="animation-delay:${i * 12}ms">
+          <div class="cell"><span class="dot ${dotCls}"></span></div>
+          <div class="cell"><span class="ticker-sym">${stock.symbol}</span>${badge}</div>
+          <div class="cell">$${parseFloat(stock.close).toFixed(2)}</div>
+          <div class="cell ${chgCls}">${chgTxt}</div>
+          <div class="cell">
+            <div class="rsi-wrap">
+              <span style="color:${rc};min-width:32px">${rsi.toFixed(1)}</span>
+              <div class="rsi-track">
+                <div class="rsi-fill" style="width:${rsiFill};background:${rc}"></div>
+              </div>
+            </div>
+          </div>
+          <div class="cell ${gapCls}">${gap.toFixed(1)}%</div>
+          <div class="cell"><span class="strike">${stock.strike}</span></div>
+        </div>`;
+      }).join('');
 
-        tbody.innerHTML = "";
-
-        if (!data || data.length === 0) {
-            tbody.innerHTML = `
-            <tr>
-                <td colspan="6">No candidates found</td>
-            </tr>`;
-            return;
-        }
-
-        data.forEach(stock => {
-            tbody.innerHTML += `
-            <tr>
-                <td>${stock.symbol}</td>
-                <td>${stock.close}</td>
-                <td>${stock.monthly_change}%</td>
-                <td>${stock.rsi}</td>
-                <td>${stock.high_gap}%</td>
-                <td>${stock.strike}</td>
-            </tr>`;
-        });
-
-    } catch (error) {
-
-        document.getElementById("status").innerText =
-            "Failed to load swing.json";
-
-        console.error(error);
+    } catch (err) {
+      document.getElementById('rowsContainer').innerHTML =
+        '<div class="msg err">Failed to load swing.json — ' + err.message + '</div>';
+      document.getElementById('statusTxt').textContent = 'error';
+      console.error(err);
     }
-}
+  }
 
-// initial load
-loadSwing();
-
+  loadSwing();
 </script>
-
 </body>
-    </html>
+</html>
