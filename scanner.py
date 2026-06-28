@@ -145,14 +145,13 @@ def market_return() -> float:
     return float((close.iloc[-1] / close.iloc[-20] - 1) * 100)
 
 # ─────────────────────────────────────────────
-#  HARD GATES  (all must pass → else drop)
+#  HARD GATES  (all 3 must pass → else drop)
 # ─────────────────────────────────────────────
-# G1  EMA 50 > EMA 200  (golden cross active)
-# G2  Price > EMA 50    (price above short MA)
-# G3  RSI 45–78         (momentum not overbought/dead)
-# G4  RS vs Nifty > 0   (outperforming benchmark)
-# G5  Within 20% of 52w high  (uptrend not broken)
-# G6  Volume 10d avg > 500 k  (liquid enough)
+# G1  EMA 50 > EMA 200      (golden cross active)
+# G2  Price > EMA 50         (riding above cross)
+# G3  RSI < 82               (not in exhaustion)
+#
+#  RS, Volume, 52wH, 5d momentum → scoring only (rank picks, not gate them)
 
 # ─────────────────────────────────────────────
 #  CORE ANALYSIS — High Conviction Golden Cross
@@ -189,13 +188,10 @@ def analyze(ticker: str, mkt_ret: float) -> dict | None:
     high_52w   = float(df["High"].iloc[-252:].max()) if len(df) >= 252 else float(df["High"].max())
     from_52w_h = round((close_now / high_52w - 1) * 100, 2)
 
-    # ── HARD GATES — exit immediately if any fail ──
+    # ── HARD GATES — only 3, must all pass ──────
     if e50_now <= e200_now:          return None   # G1: no golden cross
     if close_now <= e50_now:         return None   # G2: price below EMA50
-    if not (45 <= rsi_val <= 78):    return None   # G3: bad RSI zone
-    if rel_strength <= 0:            return None   # G4: underperforming Nifty
-    if from_52w_h < -20:             return None   # G5: trend broken (>20% off high)
-    if vol_10d < 500_000:            return None   # G6: illiquid
+    if rsi_val >= 82:                return None   # G3: overbought exhaustion only
 
     # ── Fresh cross detection (≤15 bars) ──────
     FRESH_WINDOW = 15
@@ -208,17 +204,18 @@ def analyze(ticker: str, mkt_ret: float) -> dict | None:
     # 5-day momentum
     mom_5d = round(float((close_s.iloc[-1] / close_s.iloc[-5] - 1) * 100), 2)
 
-    # ── Quality score (on top of hard gates) ──
+    # ── Quality score — gates passed, now rank ──
     score = 0
 
-    score += 3                              # base: all gates cleared
+    score += 3                              # base: cross + price confirmed
     if fresh_cross:         score += 3      # freshness premium
-    if 55 < rsi_val < 70:  score += 2      # sweet-spot RSI
-    if rel_strength > 3:   score += 2      # strong outperformer
-    if rel_strength > 7:   score += 1      # exceptional RS
+    if 50 < rsi_val < 70:  score += 2      # sweet-spot RSI
+    elif 70 <= rsi_val < 82: score += 1    # extended but not exhausted
+    if rel_strength > 0:   score += 2      # beating Nifty
+    if rel_strength > 5:   score += 1      # strongly outperforming
     if mom_5d > 1.5:       score += 1      # short-term thrust
-    if from_52w_h >= -8:   score += 1      # near ATH expansion
-    if cross_gap_pct < 3:  score += 1      # EMA50 just cleared 200 (not stretched)
+    if from_52w_h >= -10:  score += 1      # near ATH = trend intact
+    if vol_10d > 1_000_000: score += 1     # high liquidity bonus
 
     # ── Signal ────────────────────────────────
     if score >= 10 and fresh_cross:
@@ -249,6 +246,102 @@ def analyze(ticker: str, mkt_ret: float) -> dict | None:
         "upside_tgt":   upside_target,
         "upside_%":     upside_pct,
     }
+
+# ─────────────────────────────────────────────
+#  DEBUG MODE  — shows exactly which gate kills each stock
+#  Run:  python golden_cross_scanner.py --debug
+# ─────────────────────────────────────────────
+GATE_LABELS = {
+    "G1": "EMA50 > EMA200  (golden cross)",
+    "G2": "Price > EMA50   (price above short MA)",
+    "G3": "RSI 45–78       (momentum zone)",
+    "G4": "RS vs Nifty > 0 (outperforming index)",
+    "G5": "Within 20% 52wH (trend intact)",
+    "G6": "Vol 10d > 500k  (liquid)",
+}
+
+def debug_gates(mkt_ret: float) -> None:
+    """Print a gate-by-gate breakdown for every ticker. Never sends Telegram."""
+    rows = []
+    for t in TICKERS:
+        df = get_data(t)
+        name = t.replace(".NS", "")
+        if df is None:
+            rows.append({"ticker": name, "failed": "NO_DATA",
+                         "G1":"?","G2":"?","G3":"?","G4":"?","G5":"?","G6":"?",
+                         "rsi": "-", "rs": "-", "52wh": "-", "vol_k": "-"})
+            continue
+
+        close_s = df["Close"].squeeze()
+        vol_s   = df["Volume"].squeeze()
+
+        df["EMA50"]  = close_s.ewm(span=50,  adjust=False).mean()
+        df["EMA200"] = close_s.ewm(span=200, adjust=False).mean()
+        df["RSI"]    = rsi(close_s)
+
+        e50   = float(df["EMA50"].squeeze().iloc[-1])
+        e200  = float(df["EMA200"].squeeze().iloc[-1])
+        rsi_v = float(df["RSI"].iloc[-1])
+        vol   = float(vol_s.iloc[-10:].mean())
+        cmp   = float(close_s.iloc[-1])
+
+        stock_ret = float((close_s.iloc[-1] / close_s.iloc[-20] - 1) * 100)
+        rs        = round(stock_ret - mkt_ret, 2)
+        high_52w  = float(df["High"].iloc[-252:].max()) if len(df) >= 252 else float(df["High"].max())
+        from_ath  = round((cmp / high_52w - 1) * 100, 2)
+
+        g1 = "✅" if e50 > e200                  else "❌"
+        g2 = "✅" if cmp > e50                   else "❌"
+        g3 = "✅" if 45 <= rsi_v <= 78           else "❌"
+        g4 = "✅" if rs > 0                      else "❌"
+        g5 = "✅" if from_ath >= -20             else "❌"
+        g6 = "✅" if vol >= 500_000              else "❌"
+
+        failed = [k for k, v in {"G1":g1,"G2":g2,"G3":g3,"G4":g4,"G5":g5,"G6":g6}.items() if v == "❌"]
+        rows.append({
+            "ticker":  name,
+            "failed":  ",".join(failed) if failed else "NONE — qualifies!",
+            "G1": g1, "G2": g2, "G3": g3, "G4": g4, "G5": g5, "G6": g6,
+            "rsi":   round(rsi_v, 1),
+            "rs":    rs,
+            "52wh":  from_ath,
+            "vol_k": round(vol / 1000, 0),
+        })
+
+    dbg = pd.DataFrame(rows).sort_values("failed")
+
+    # ── summary: which gate kills the most stocks ──
+    print(f"\n{'═'*70}")
+    print(f"  DEBUG — Gate Failure Analysis  |  Nifty 20d RS base: {round(mkt_ret,2):+.2f}%")
+    print(f"{'═'*70}")
+    for gate, label in GATE_LABELS.items():
+        fails = dbg[dbg[gate] == "❌"].shape[0]
+        bar   = "█" * (fails // 2)
+        print(f"  {gate}  {label:40s}  {fails:3d} fails  {bar}")
+    print(f"{'─'*70}")
+
+    # ── stocks closest to passing all gates ──
+    dbg["fail_count"] = dbg["failed"].apply(lambda x: 0 if x == "NONE — qualifies!" else len(x.split(",")))
+    near_misses = dbg[dbg["fail_count"].between(1, 2)].sort_values("fail_count")
+
+    print(f"\n  QUALIFIED  (0 gate failures)")
+    winners = dbg[dbg["fail_count"] == 0]
+    if winners.empty:
+        print("    — none —")
+    else:
+        for _, r in winners.iterrows():
+            print(f"    ✔ {r['ticker']:18s}  RSI {r['rsi']}  RS {r['rs']:+.1f}%  52wH {r['52wh']}%  Vol {int(r['vol_k'])}k")
+
+    print(f"\n  NEAR MISSES  (1–2 gate failures)")
+    if near_misses.empty:
+        print("    — none —")
+    else:
+        for _, r in near_misses.iterrows():
+            print(f"    ✗ {r['ticker']:18s}  FAILED: {r['failed']:20s}  RSI {r['rsi']}  RS {r['rs']:+.1f}%  52wH {r['52wh']}%  Vol {int(r['vol_k'])}k")
+
+    print(f"\n{'═'*70}\n")
+    dbg.to_csv("debug_gates.csv", index=False)
+    print("  Full breakdown saved → debug_gates.csv")
 
 # ─────────────────────────────────────────────
 #  MAIN
@@ -315,6 +408,13 @@ def run():
 
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        raise ValueError("Set BOT_TOKEN and CHAT_ID env vars before running.")
-    run()
+    import sys
+    if "--debug" in sys.argv:
+        # Debug mode: no Telegram needed, just prints gate analysis
+        print("Running in DEBUG mode — no Telegram messages will be sent.")
+        mkt_ret = market_return()
+        debug_gates(mkt_ret)
+    else:
+        if not TELEGRAM_TOKEN or not CHAT_ID:
+            raise ValueError("Set BOT_TOKEN and CHAT_ID env vars before running.")
+        run()
