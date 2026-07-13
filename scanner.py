@@ -1,15 +1,11 @@
 """
-Weekly Supertrend + EMA9 Scanner — F&O Universe
+Weekly Supertrend + EMA9 Scanner — F&O Universe  (HIGH CONVICTION ONLY)
 Strategy : Weekly Supertrend(7,2) = BUY  +  Weekly Close > Weekly EMA(9)
-           + gates matched 1:1 to the Chartink screener (futures segment):
-             - Daily Volume > 100,000
-             - Daily Volume > 1.2 x Daily SMA(Daily Volume, 20)
-             - Weekly Close > Weekly SMA(Daily Close, 50)
-             - Weekly RSI(14) < 75
+           + hard quality gates (liquidity, trend, momentum)
 Signal   : STRONG BUY  → fresh Supertrend flip to buy ≤3 weeks + all gates passed
            BUY         → Supertrend buy confirmed (not fresh) + gates passed
            (everything else is silently dropped)
-Delivery : Telegram (≤5 picks, plain list) + scanner_results.csv
+Delivery : Telegram (≤5 picks, richly formatted) + scanner_results.csv
 
 Run modes:
     python weekly_supertrend_ema9_scanner.py            -> live run, sends Telegram
@@ -331,26 +327,28 @@ def market_return() -> float:
 
 # ─────────────────────────────────────────────
 #  HARD GATES  (all must pass -> else drop silently)
-#  Matched 1:1 to the Chartink screener (futures segment):
 # ─────────────────────────────────────────────
 # G1  Weekly Supertrend(7,2) direction == "buy"
-# G2  Weekly Close > Weekly EMA(Daily Close, 9)
-# G3  Daily Volume > 100,000
-# G4  Daily Volume > 1.2 x Daily SMA(Daily Volume, 20)
-# G5  Weekly Close > Weekly SMA(Daily Close, 50)
-# G6  Weekly RSI(14) < 75
+# G2  Weekly Close > Weekly EMA(9)
+# G3  Daily Close  > 50                       (no penny stocks)
+# G4  Daily Volume (10d avg) > 1,00,000        (liquidity)
+# G5  Daily Volume > 1.2x 20d avg volume       (interest / expansion)
+# G6  Weekly Close > Weekly SMA(20)            (medium-term trend)
+# G7  Weekly Close > Weekly SMA(50)            (longer-term trend)
+# G8  Weekly RSI(14) between 50 and 75         (strength, not exhausted)
 #
 # RS-vs-Nifty, momentum, 52w-high proximity -> scoring only (rank, don't gate)
 
 GATE_LABELS = {
     "G1": "Weekly Supertrend = BUY",
     "G2": "Weekly Close > Weekly EMA9",
-    "G3": "Daily Vol > 1,00,000",
-    "G4": "Daily Vol > 1.2x 20d SMA(Vol)",
-    "G5": "Weekly Close > Weekly SMA50",
-    "G6": "Weekly RSI(14) < 75",
+    "G3": "Price > 50               (no penny stocks)",
+    "G4": "10d Avg Vol > 1,00,000   (liquidity)",
+    "G5": "Vol > 1.2x 20d Avg Vol   (volume expansion)",
+    "G6": "Weekly Close > Weekly SMA20",
+    "G7": "Weekly Close > Weekly SMA50",
+    "G8": "Weekly RSI(14) 50-75     (strength zone)",
 }
-
 
 
 def compute_all(ticker: str):
@@ -365,6 +363,7 @@ def compute_all(ticker: str):
 
     weekly = supertrend(weekly, period=ST_PERIOD, mult=ST_MULT)
     weekly["EMA9"]  = weekly["Close"].ewm(span=EMA_LEN, adjust=False).mean()
+    weekly["SMA20"] = weekly["Close"].rolling(20).mean()
     weekly["SMA50"] = weekly["Close"].rolling(50).mean()
     weekly["RSI14"] = rsi(weekly["Close"], 14)
 
@@ -381,24 +380,30 @@ def analyze(ticker: str, mkt_ret: float) -> dict | None:
 
     close_now   = float(weekly["Close"].iloc[-1])
     ema9_now    = float(weekly["EMA9"].iloc[-1])
+    sma20_now   = float(weekly["SMA20"].iloc[-1])
     sma50_now   = float(weekly["SMA50"].iloc[-1])
     rsi_now     = float(weekly["RSI14"].iloc[-1])
     st_dir_now  = weekly["ST_dir"].iloc[-1]
     st_line_now = float(weekly["ST"].iloc[-1])
 
     price_now   = float(daily["Close"].iloc[-1])
-    vol_today   = float(daily["Volume"].iloc[-1])
+    vol_10d     = float(daily["Volume"].iloc[-10:].mean())
     vol_20d_avg = float(daily["VOL_SMA20"].iloc[-1])
-    vol_10d     = float(daily["Volume"].iloc[-10:].mean())   # kept for scoring only
+    vol_today   = float(daily["Volume"].iloc[-1])
 
-    # ── HARD GATES — exact match to Chartink screener ──
-    if st_dir_now != "buy":                        return None   # G1: weekly Supertrend = buy
-    if close_now <= ema9_now:                       return None   # G2: weekly close > weekly EMA9
-    if vol_today <= 100_000:                         return None   # G3: daily volume > 100000
-    if pd.isna(vol_20d_avg) or vol_today <= 1.2 * vol_20d_avg:
-        return None                                                # G4: daily volume > 1.2 x 20d SMA(volume)
-    if close_now <= sma50_now:                       return None   # G5: weekly close > weekly SMA50
-    if rsi_now >= 75:                                 return None   # G6: weekly RSI(14) < 75
+    # ── HARD GATES ──
+    if st_dir_now != "buy":                       return None   # G1
+    if close_now <= ema9_now:                      return None   # G2
+    if price_now <= 50:                            return None   # G3
+    if vol_10d <= 100_000:                          return None   # G4
+    # G5: recent volume trend vs longer average — trailing 10d avg vs 20d avg
+    # (not a single day's volume) so a partial/quiet session doesn't wipe out
+    # an otherwise valid setup.
+    if pd.isna(vol_20d_avg) or vol_10d <= 1.1 * vol_20d_avg:
+        return None
+    if close_now <= sma20_now:                      return None   # G6
+    if close_now <= sma50_now:                       return None   # G7
+    if not (50 <= rsi_now <= 75):                    return None   # G8
 
     # ── Fresh Supertrend flip? (buy started within FRESH_WEEKS) ──
     dirs = weekly["ST_dir"]
@@ -474,13 +479,15 @@ def debug_gates(mkt_ret: float) -> None:
 
         close_now   = float(weekly["Close"].iloc[-1])
         ema9_now    = float(weekly["EMA9"].iloc[-1])
+        sma20_now   = float(weekly["SMA20"].iloc[-1])
         sma50_now   = float(weekly["SMA50"].iloc[-1])
         rsi_now     = float(weekly["RSI14"].iloc[-1])
         st_dir_now  = weekly["ST_dir"].iloc[-1]
 
         price_now   = float(daily["Close"].iloc[-1])
-        vol_today   = float(daily["Volume"].iloc[-1])
+        vol_10d     = float(daily["Volume"].iloc[-10:].mean())
         vol_20d_avg = float(daily["VOL_SMA20"].iloc[-1])
+        vol_today   = float(daily["Volume"].iloc[-1])
 
         stock_ret = float((daily["Close"].iloc[-1] / daily["Close"].iloc[-20] - 1) * 100)
         rs        = round(stock_ret - mkt_ret, 2)
@@ -489,12 +496,14 @@ def debug_gates(mkt_ret: float) -> None:
 
         g1 = "✅" if st_dir_now == "buy" else "❌"
         g2 = "✅" if close_now > ema9_now else "❌"
-        g3 = "✅" if vol_today > 100_000 else "❌"
-        g4 = "✅" if (not pd.isna(vol_20d_avg) and vol_today > 1.2 * vol_20d_avg) else "❌"
-        g5 = "✅" if close_now > sma50_now else "❌"
-        g6 = "✅" if rsi_now < 75 else "❌"
+        g3 = "✅" if price_now > 50 else "❌"
+        g4 = "✅" if vol_10d > 100_000 else "❌"
+        g5 = "✅" if (not pd.isna(vol_20d_avg) and vol_10d > 1.1 * vol_20d_avg) else "❌"
+        g6 = "✅" if close_now > sma20_now else "❌"
+        g7 = "✅" if close_now > sma50_now else "❌"
+        g8 = "✅" if 50 <= rsi_now <= 75 else "❌"
 
-        gates = {"G1": g1, "G2": g2, "G3": g3, "G4": g4, "G5": g5, "G6": g6}
+        gates = {"G1": g1, "G2": g2, "G3": g3, "G4": g4, "G5": g5, "G6": g6, "G7": g7, "G8": g8}
         failed = [k for k, v in gates.items() if v == "❌"]
 
         rows.append({
@@ -504,11 +513,11 @@ def debug_gates(mkt_ret: float) -> None:
             "rsi": round(rsi_now, 1) if not pd.isna(rsi_now) else "-",
             "rs": rs,
             "52wh": from_ath,
-            "vol_k": round(vol_today / 1000, 0),
+            "vol_k": round(vol_10d / 1000, 0),
         })
-
+ 
     dbg = pd.DataFrame(rows).sort_values("failed")
-
+ 
     print(f"\n{'═'*72}")
     print(f"  DEBUG — Weekly Supertrend(7,2) + EMA9 Gate Analysis  |  Nifty 20d: {round(mkt_ret,2):+.2f}%")
     print(f"{'═'*72}")
@@ -517,7 +526,7 @@ def debug_gates(mkt_ret: float) -> None:
         bar = "█" * (fails // 2)
         print(f"  {gate}  {label:35s}  {fails:3d} fails  {bar}")
     print(f"{'─'*72}")
-
+ 
     dbg["fail_count"] = dbg["failed"].apply(lambda x: 0 if x == "NONE — qualifies!" else len(x.split(",")))
     near_misses = dbg[dbg["fail_count"].between(1, 2)].sort_values("fail_count")
     winners = dbg[dbg["fail_count"] == 0]
