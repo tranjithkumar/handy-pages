@@ -1,13 +1,21 @@
 """
-Golden Cross Scanner — Nifty 200 / F&O Universe  (HIGH CONVICTION ONLY)
-Strategy : EMA 50 / EMA 200 Golden Cross + hard quality gates
-Signal   : STRONG BUY  → fresh cross ≤10 bars + all gates passed
-           BUY         → cross confirmed + gates passed
+Weekly Supertrend + EMA9 Scanner — F&O Universe  (HIGH CONVICTION ONLY)
+Strategy : Weekly Supertrend(7,2) = BUY  +  Weekly Close > Weekly EMA(9)
+           + hard quality gates (liquidity, trend, momentum)
+Signal   : STRONG BUY  → fresh Supertrend flip to buy ≤3 weeks + all gates passed
+           BUY         → Supertrend buy confirmed (not fresh) + gates passed
            (everything else is silently dropped)
 Delivery : Telegram (≤5 picks, richly formatted) + scanner_results.csv
+
+Run modes:
+    python weekly_supertrend_ema9_scanner.py            -> live run, sends Telegram
+    python weekly_supertrend_ema9_scanner.py --debug     -> prints gate-by-gate
+                                                             failure breakdown,
+                                                             no Telegram sent
 """
 
 import os
+import sys
 import requests
 import numpy as np
 import pandas as pd
@@ -21,63 +29,136 @@ CHAT_ID        = os.environ.get("CHAT_ID")
 
 INDEX = "^NSEI"   # Nifty 50 used as benchmark
 
-# ── Nifty 200 + active F&O universe ──────────
-# Core Nifty 50 + midcap / F&O names commonly traded.
-# Extend this list freely; all tickers are .NS (NSE).
-TICKERS = [
-    # ── Large-cap / Nifty 50 ──
-    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS",
-    "ICICIBANK.NS", "LT.NS", "SBIN.NS", "AXISBANK.NS",
-    "BAJFINANCE.NS", "KOTAKBANK.NS", "MARUTI.NS",
-    "TATAMOTORS.NS", "BHARTIARTL.NS", "ITC.NS",
-    "WIPRO.NS", "HCLTECH.NS", "SUNPHARMA.NS", "ONGC.NS",
-    "NTPC.NS", "POWERGRID.NS", "COALINDIA.NS", "TITAN.NS",
-    "NESTLEIND.NS", "TECHM.NS", "ULTRACEMCO.NS", "GRASIM.NS",
+ST_PERIOD     = 7      # Supertrend ATR period
+ST_MULT       = 2      # Supertrend multiplier
+EMA_LEN       = 9      # Weekly EMA length
+FRESH_WEEKS   = 3      # "fresh flip" window, in weeks
+
+FNO_CACHE_FILE = "fno_list_cache.csv"
+FNO_CACHE_MAX_AGE_DAYS = 7   # reuse cache if fresher than this, when live fetch fails
+
+# ── Emergency fallback ONLY ──
+# Used only if BOTH the live NSE fetch and the local cache fail (e.g. no
+# internet, NSE blocking the IP). This is deliberately small — just Nifty 50 —
+# so a stale/incomplete run is obvious rather than silently passing off an
+# old F&O list as current.
+EMERGENCY_FALLBACK_TICKERS = [
+    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
+    "LT.NS", "SBIN.NS", "AXISBANK.NS", "BAJFINANCE.NS", "KOTAKBANK.NS",
+    "MARUTI.NS", "TATAMOTORS.NS", "BHARTIARTL.NS", "ITC.NS", "WIPRO.NS",
+    "HCLTECH.NS", "SUNPHARMA.NS", "ONGC.NS", "NTPC.NS", "POWERGRID.NS",
+    "COALINDIA.NS", "TITAN.NS", "TECHM.NS", "ULTRACEMCO.NS", "GRASIM.NS",
     "HINDALCO.NS", "JSWSTEEL.NS", "TATASTEEL.NS", "INDUSINDBK.NS",
     "ADANIENT.NS", "ADANIPORTS.NS", "BAJAJ-AUTO.NS", "BAJAJFINSV.NS",
-    "DRREDDY.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "CIPLA.NS",
-    "DIVISLAB.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS", "BRITANNIA.NS",
-    "HDFCLIFE.NS", "SBILIFE.NS", "M&M.NS", "BPCL.NS",
-    "TATACONSUM.NS", "SHRIRAMFIN.NS",
-
-    # ── Nifty Next 50 / Midcap F&O ──
-    "PIDILITIND.NS", "SIEMENS.NS", "HAVELLS.NS", "VOLTAS.NS",
-    "BERGEPAINT.NS", "COLPAL.NS", "MARICO.NS", "GODREJCP.NS",
-    "DABUR.NS", "EMAMILTD.NS", "UBL.NS", "MCDOWELL-N.NS",
-    "TATAPOWER.NS", "ADANIGREEN.NS", "ADANITRANS.NS",
-    "ZOMATO.NS", "PAYTM.NS", "DMART.NS", "NYKAA.NS",
-    "POLICYBZR.NS", "IRCTC.NS", "IRFC.NS", "RVNL.NS",
-    "RAILVIKAS.NS", "PFC.NS", "RECLTD.NS",
-    "BANKBARODA.NS", "CANARABANK.NS", "PNB.NS", "UNIONBANK.NS",
-    "FEDERALBNK.NS", "IDFCFIRSTB.NS", "BANDHANBNK.NS",
-    "CHOLAFIN.NS", "BAJAJHFL.NS", "MUTHOOTFIN.NS", "MANAPPURAM.NS",
-    "LTIM.NS", "MPHASIS.NS", "PERSISTENT.NS", "COFORGE.NS",
-    "LTTS.NS", "KPITTECH.NS", "TATAELXSI.NS",
-    "ASTRAL.NS", "AAPL.NS", "SUPREMEIND.NS",
-    "PIIND.NS", "UPL.NS", "CHAMBALFERT.NS", "COROMANDEL.NS",
-    "SYNGENE.NS", "LALPATHLAB.NS", "METROPOLIS.NS",
-    "MAXHEALTH.NS", "FORTIS.NS", "NARAYANAMRN.NS",
-    "PAGEIND.NS", "VEDL.NS", "NMDC.NS", "SAIL.NS",
-    "JINDALSTEL.NS", "RATNAMANI.NS", "KALYANKJIL.NS",
-    "INDIAMART.NS", "NAUKRI.NS", "JUSTDIAL.NS",
-    "OBEROIRLTY.NS", "DLF.NS", "GODREJPROP.NS", "PRESTIGE.NS",
-    "PHOENIXLTD.NS", "CONCOR.NS", "BLUEDART.NS", "DELHIVERY.NS",
-    "ZYDUSLIFE.NS", "ALKEM.NS", "TORNTPHARM.NS", "AUROPHARMA.NS",
-    "GLENMARK.NS", "IPCALAB.NS", "NATCOPHARM.NS",
-    "HINDPETRO.NS", "IOC.NS", "PETRONET.NS", "GAIL.NS",
-    "OIL.NS", "MGL.NS", "IGL.NS", "CESC.NS",
-    "TRENT.NS", "ABFRL.NS", "VBL.NS", "RADICO.NS",
-    "BALKRISIND.NS", "CEAT.NS", "MRF.NS", "APOLLOTYRE.NS",
-    "ASHOKLEY.NS", "ESCORTS.NS", "TIINDIA.NS", "MOTHERSON.NS",
-    "BHARATFORG.NS", "BOSCHLTD.NS", "SCHAEFFLER.NS",
-    "LINDEINDIA.NS", "DEEPAKNTR.NS", "AARTIIND.NS", "ATUL.NS",
-    "SRF.NS", "GALAXYSURF.NS", "NAVINFLUOR.NS",
-    "ABCAPITAL.NS", "ICICIGI.NS", "ICICIPRU.NS", "HDFCAMC.NS",
-    "NIPPONLIFE.NS", "SUNDARMFIN.NS", "LICHSGFIN.NS",
-    "STARHEALTH.NS", "GODIGIT.NS",
-    "GMRINFRA.NS", "AIAENGINEERING.NS", "GRINDWELL.NS",
-    "KFINTECH.NS", "CDSL.NS", "BSE.NS",
+    "DRREDDY.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "CIPLA.NS", "DIVISLAB.NS",
+    "APOLLOHOSP.NS", "ASIANPAINT.NS", "BRITANNIA.NS", "HDFCLIFE.NS",
+    "SBILIFE.NS", "M&M.NS", "BPCL.NS", "TATACONSUM.NS", "SHRIRAMFIN.NS",
 ]
+
+
+def fetch_fno_list_from_nse(timeout: int = 10) -> list[str] | None:
+    """
+    Fetch the live 'Securities in F&O' list from NSE's JSON API.
+
+    NSE blocks bare requests with a 401/403 unless the request carries
+    browser-like headers AND cookies obtained from an initial visit to the
+    site. We replicate that here with a requests.Session().
+
+    Returns a list of tickers like ['RELIANCE.NS', 'TCS.NS', ...] on success,
+    or None if the fetch fails for any reason (network blocked, NSE changed
+    its endpoint/anti-bot check, rate-limited, etc).
+    """
+    headers = {
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/124.0.0.0 Safari/537.36"),
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.nseindia.com/market-data/securities-available-for-trading",
+    }
+    api_url = "https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O"
+
+    try:
+        session = requests.Session()
+        session.headers.update(headers)
+        # Visit homepage first to pick up the cookies NSE's API checks for
+        session.get("https://www.nseindia.com", timeout=timeout)
+        session.get("https://www.nseindia.com/market-data/securities-available-for-trading",
+                    timeout=timeout)
+
+        resp = session.get(api_url, timeout=timeout)
+        resp.raise_for_status()
+        payload = resp.json()
+
+        rows = payload.get("data", [])
+        symbols = sorted({row["symbol"].strip() for row in rows if row.get("symbol")})
+        if not symbols:
+            return None
+
+        tickers = [f"{s}.NS" for s in symbols]
+        return tickers
+
+    except Exception as e:
+        print(f"[F&O fetch] Live NSE fetch failed: {e}")
+        return None
+
+
+def load_fno_cache() -> list[str] | None:
+    """Load the cached F&O list if it exists and isn't too stale."""
+    if not os.path.exists(FNO_CACHE_FILE):
+        return None
+    try:
+        cache_df = pd.read_csv(FNO_CACHE_FILE, parse_dates=["fetched_at"])
+        if cache_df.empty:
+            return None
+        age_days = (pd.Timestamp.now() - cache_df["fetched_at"].iloc[0]).days
+        if age_days > FNO_CACHE_MAX_AGE_DAYS:
+            print(f"[F&O cache] Cache is {age_days}d old (> {FNO_CACHE_MAX_AGE_DAYS}d) — treating as stale.")
+            return None
+        tickers = cache_df["ticker"].dropna().tolist()
+        print(f"[F&O cache] Using cached list from {cache_df['fetched_at'].iloc[0].date()} "
+              f"({len(tickers)} tickers, {age_days}d old).")
+        return tickers
+    except Exception as e:
+        print(f"[F&O cache] Failed to read cache: {e}")
+        return None
+
+
+def save_fno_cache(tickers: list[str]) -> None:
+    try:
+        pd.DataFrame({
+            "ticker": tickers,
+            "fetched_at": pd.Timestamp.now(),
+        }).to_csv(FNO_CACHE_FILE, index=False)
+    except Exception as e:
+        print(f"[F&O cache] Failed to save cache: {e}")
+
+
+def get_fno_universe() -> list[str]:
+    """
+    Resolution order:
+      1. Live fetch from NSE (freshest, reflects latest quarterly F&O review)
+      2. Local cache, if fresher than FNO_CACHE_MAX_AGE_DAYS
+      3. Hardcoded Nifty-50 emergency fallback (logs a loud warning)
+    """
+    tickers = fetch_fno_list_from_nse()
+    if tickers:
+        print(f"[F&O universe] Live fetch OK — {len(tickers)} F&O stocks from NSE.")
+        save_fno_cache(tickers)
+        return tickers
+
+    tickers = load_fno_cache()
+    if tickers:
+        return tickers
+
+    print("⚠️  [F&O universe] Live fetch AND cache both unavailable — "
+          "falling back to a small hardcoded Nifty-50 list. "
+          "Results will NOT reflect the full F&O universe. "
+          "Check your network / NSE access.")
+    return EMERGENCY_FALLBACK_TICKERS
+
+
+TICKERS = get_fno_universe()
 
 # de-duplicate while preserving order
 seen = set()
@@ -91,29 +172,42 @@ def send_telegram(msg: str) -> None:
         print("[Telegram] Token/Chat ID missing – skipping.")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    # Telegram caps a single message at ~4096 chars; chunk if needed
-    for chunk in [msg[i:i+4000] for i in range(0, len(msg), 4000)]:
+    for chunk in [msg[i:i + 4000] for i in range(0, len(msg), 4000)]:
         try:
             requests.post(url, data={"chat_id": CHAT_ID, "text": chunk}, timeout=10)
         except Exception as e:
             print("Telegram error:", e)
 
 # ─────────────────────────────────────────────
-#  DATA FETCH  (1 year for reliable EMA 200)
+#  DATA FETCH  (3 years daily -> gives ~150 weekly bars, enough for SMA50 weekly)
 # ─────────────────────────────────────────────
-def get_data(ticker: str) -> pd.DataFrame | None:
+def get_daily(ticker: str) -> pd.DataFrame | None:
     try:
-        df = yf.download(ticker, period="15mo", interval="1d", progress=False)
+        df = yf.download(ticker, period="3y", interval="1d", progress=False)
         if df is None or df.empty:
             return None
         df = df.dropna()
         df = df[~df.index.duplicated(keep="last")]
-        # Need at least 210 bars for EMA 200 to be meaningful
-        if len(df) < 210:
+        if len(df) < 260:      # need at least ~1yr of daily bars
             return None
+        # yfinance sometimes returns MultiIndex columns for single tickers
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
         return df
     except Exception:
         return None
+
+
+def to_weekly(df: pd.DataFrame) -> pd.DataFrame:
+    """Resample daily OHLCV to weekly bars, week ending Friday."""
+    wk = df.resample("W-FRI").agg({
+        "Open":   "first",
+        "High":   "max",
+        "Low":    "min",
+        "Close":  "last",
+        "Volume": "sum",
+    }).dropna()
+    return wk
 
 # ─────────────────────────────────────────────
 #  INDICATORS
@@ -125,207 +219,288 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     rs    = gain / loss
     return 100 - (100 / (1 + rs))
 
-def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+
+def atr_wilder(df: pd.DataFrame, period: int) -> pd.Series:
     high, low, prev_close = df["High"], df["Low"], df["Close"].shift(1)
     tr = pd.concat([
         high - low,
         (high - prev_close).abs(),
-        (low  - prev_close).abs()
+        (low - prev_close).abs()
     ], axis=1).max(axis=1)
-    return tr.rolling(period).mean()
+    return tr.ewm(alpha=1 / period, adjust=False).mean()
+
+
+def supertrend(df: pd.DataFrame, period: int = 7, mult: float = 2.0) -> pd.DataFrame:
+    """
+    Classic Supertrend implementation.
+    Returns df with added columns: 'ST' (the line) and 'ST_dir'
+    ('buy' = price above line / uptrend, 'sell' = downtrend).
+    """
+    hl2 = (df["High"] + df["Low"]) / 2
+    atr = atr_wilder(df, period)
+
+    upperband = hl2 + mult * atr
+    lowerband = hl2 - mult * atr
+
+    final_upper = upperband.copy()
+    final_lower = lowerband.copy()
+    st_dir = pd.Series(index=df.index, dtype=object)
+    st_line = pd.Series(index=df.index, dtype=float)
+
+    close = df["Close"]
+
+    for i in range(len(df)):
+        if i == 0:
+            st_dir.iloc[i] = "buy"
+            st_line.iloc[i] = final_lower.iloc[i]
+            continue
+
+        # carry forward bands (standard Supertrend band-locking rule)
+        if upperband.iloc[i] < final_upper.iloc[i - 1] or close.iloc[i - 1] > final_upper.iloc[i - 1]:
+            final_upper.iloc[i] = upperband.iloc[i]
+        else:
+            final_upper.iloc[i] = final_upper.iloc[i - 1]
+
+        if lowerband.iloc[i] > final_lower.iloc[i - 1] or close.iloc[i - 1] < final_lower.iloc[i - 1]:
+            final_lower.iloc[i] = lowerband.iloc[i]
+        else:
+            final_lower.iloc[i] = final_lower.iloc[i - 1]
+
+        prev_dir = st_dir.iloc[i - 1]
+        if prev_dir == "buy":
+            if close.iloc[i] < final_lower.iloc[i]:
+                st_dir.iloc[i] = "sell"
+                st_line.iloc[i] = final_upper.iloc[i]
+            else:
+                st_dir.iloc[i] = "buy"
+                st_line.iloc[i] = final_lower.iloc[i]
+        else:  # prev_dir == "sell"
+            if close.iloc[i] > final_upper.iloc[i]:
+                st_dir.iloc[i] = "buy"
+                st_line.iloc[i] = final_lower.iloc[i]
+            else:
+                st_dir.iloc[i] = "sell"
+                st_line.iloc[i] = final_upper.iloc[i]
+
+    out = df.copy()
+    out["ST"]     = st_line
+    out["ST_dir"] = st_dir
+    return out
 
 # ─────────────────────────────────────────────
-#  BENCHMARK RETURN
+#  BENCHMARK RETURN  (20 trading days ~ 4 weeks, on daily data)
 # ─────────────────────────────────────────────
 def market_return() -> float:
-    df = get_data(INDEX)
+    df = get_daily(INDEX)
     if df is None or len(df) < 20:
         return 0.0
-    close = pd.Series(df["Close"].values.flatten())
+    close = df["Close"]
     return float((close.iloc[-1] / close.iloc[-20] - 1) * 100)
 
 # ─────────────────────────────────────────────
-#  HARD GATES  (all 3 must pass → else drop)
+#  HARD GATES  (all must pass -> else drop silently)
 # ─────────────────────────────────────────────
-# G1  EMA 50 > EMA 200      (golden cross active)
-# G2  Price > EMA 50         (riding above cross)
-# G3  RSI < 82               (not in exhaustion)
+# G1  Weekly Supertrend(7,2) direction == "buy"
+# G2  Weekly Close > Weekly EMA(9)
+# G3  Daily Close  > 50                       (no penny stocks)
+# G4  Daily Volume (10d avg) > 1,00,000        (liquidity)
+# G5  Daily Volume > 1.2x 20d avg volume       (interest / expansion)
+# G6  Weekly Close > Weekly SMA(20)            (medium-term trend)
+# G7  Weekly Close > Weekly SMA(50)            (longer-term trend)
+# G8  Weekly RSI(14) between 50 and 75         (strength, not exhausted)
 #
-#  RS, Volume, 52wH, 5d momentum → scoring only (rank picks, not gate them)
+# RS-vs-Nifty, momentum, 52w-high proximity -> scoring only (rank, don't gate)
 
-# ─────────────────────────────────────────────
-#  CORE ANALYSIS — High Conviction Golden Cross
-# ─────────────────────────────────────────────
-def analyze(ticker: str, mkt_ret: float) -> dict | None:
-    df = get_data(ticker)
-    if df is None:
+GATE_LABELS = {
+    "G1": "Weekly Supertrend = BUY",
+    "G2": "Weekly Close > Weekly EMA9",
+    "G3": "Price > 50               (no penny stocks)",
+    "G4": "10d Avg Vol > 1,00,000   (liquidity)",
+    "G5": "Vol > 1.2x 20d Avg Vol   (volume expansion)",
+    "G6": "Weekly Close > Weekly SMA20",
+    "G7": "Weekly Close > Weekly SMA50",
+    "G8": "Weekly RSI(14) 50-75     (strength zone)",
+}
+
+
+def compute_all(ticker: str):
+    """Fetch data and compute everything needed for both live run and debug."""
+    daily = get_daily(ticker)
+    if daily is None:
         return None
 
-    close_s = df["Close"].squeeze()
-    vol_s   = df["Volume"].squeeze()
+    weekly = to_weekly(daily)
+    if len(weekly) < 55:      # need enough bars for weekly SMA50 + Supertrend warmup
+        return None
 
-    # ── Indicators ────────────────────────────
-    df["EMA50"]  = close_s.ewm(span=50,  adjust=False).mean()
-    df["EMA200"] = close_s.ewm(span=200, adjust=False).mean()
-    df["RSI"]    = rsi(close_s)
-    df["ATR"]    = atr(df)
+    weekly = supertrend(weekly, period=ST_PERIOD, mult=ST_MULT)
+    weekly["EMA9"]  = weekly["Close"].ewm(span=EMA_LEN, adjust=False).mean()
+    weekly["SMA20"] = weekly["Close"].rolling(20).mean()
+    weekly["SMA50"] = weekly["Close"].rolling(50).mean()
+    weekly["RSI14"] = rsi(weekly["Close"], 14)
 
-    ema50  = df["EMA50"].squeeze()
-    ema200 = df["EMA200"].squeeze()
+    daily["VOL_SMA20"] = daily["Volume"].rolling(20).mean()
 
-    close_now = float(close_s.iloc[-1])
-    e50_now   = float(ema50.iloc[-1])
-    e200_now  = float(ema200.iloc[-1])
-    rsi_val   = float(df["RSI"].iloc[-1])
-    atr_val   = float(df["ATR"].iloc[-1])
-    vol_10d   = float(vol_s.iloc[-10:].mean())
+    return daily, weekly
 
-    # Relative strength vs Nifty (20-day)
-    stock_ret_20 = float((close_s.iloc[-1] / close_s.iloc[-20] - 1) * 100)
+
+def analyze(ticker: str, mkt_ret: float) -> dict | None:
+    data = compute_all(ticker)
+    if data is None:
+        return None
+    daily, weekly = data
+
+    close_now   = float(weekly["Close"].iloc[-1])
+    ema9_now    = float(weekly["EMA9"].iloc[-1])
+    sma20_now   = float(weekly["SMA20"].iloc[-1])
+    sma50_now   = float(weekly["SMA50"].iloc[-1])
+    rsi_now     = float(weekly["RSI14"].iloc[-1])
+    st_dir_now  = weekly["ST_dir"].iloc[-1]
+    st_line_now = float(weekly["ST"].iloc[-1])
+
+    price_now   = float(daily["Close"].iloc[-1])
+    vol_10d     = float(daily["Volume"].iloc[-10:].mean())
+    vol_20d_avg = float(daily["VOL_SMA20"].iloc[-1])
+    vol_today   = float(daily["Volume"].iloc[-1])
+
+    # ── HARD GATES ──
+    if st_dir_now != "buy":                       return None   # G1
+    if close_now <= ema9_now:                      return None   # G2
+    if price_now <= 50:                            return None   # G3
+    if vol_10d <= 100_000:                          return None   # G4
+    if pd.isna(vol_20d_avg) or vol_today <= 1.2 * vol_20d_avg:
+        return None                                              # G5
+    if close_now <= sma20_now:                      return None   # G6
+    if close_now <= sma50_now:                       return None   # G7
+    if not (50 <= rsi_now <= 75):                    return None   # G8
+
+    # ── Fresh Supertrend flip? (buy started within FRESH_WEEKS) ──
+    dirs = weekly["ST_dir"]
+    fresh_flip = False
+    for back in range(1, FRESH_WEEKS + 1):
+        if len(dirs) > back and dirs.iloc[-1 - back] == "sell":
+            fresh_flip = True
+            break
+
+    # ── Relative strength vs Nifty (20 trading days) ──
+    stock_ret_20 = float((daily["Close"].iloc[-1] / daily["Close"].iloc[-20] - 1) * 100)
     rel_strength = round(stock_ret_20 - mkt_ret, 2)
 
-    # 52-week high proximity
-    high_52w   = float(df["High"].iloc[-252:].max()) if len(df) >= 252 else float(df["High"].max())
-    from_52w_h = round((close_now / high_52w - 1) * 100, 2)
+    # ── 52-week high proximity ──
+    high_52w   = float(daily["High"].iloc[-252:].max()) if len(daily) >= 252 else float(daily["High"].max())
+    from_52w_h = round((price_now / high_52w - 1) * 100, 2)
 
-    # ── HARD GATES — only 3, must all pass ──────
-    if e50_now <= e200_now:          return None   # G1: no golden cross
-    if close_now <= e50_now:         return None   # G2: price below EMA50
-    if rsi_val >= 82:                return None   # G3: overbought exhaustion only
+    # ── 1-week momentum ──
+    mom_1w = round(float((weekly["Close"].iloc[-1] / weekly["Close"].iloc[-2] - 1) * 100), 2) \
+        if len(weekly) >= 2 else 0.0
 
-    # ── Fresh cross detection (≤15 bars) ──────
-    FRESH_WINDOW = 15
-    prev_e50  = float(ema50.iloc[-FRESH_WINDOW - 1])
-    prev_e200 = float(ema200.iloc[-FRESH_WINDOW - 1])
-    fresh_cross = prev_e50 < prev_e200          # was below → now above
+    gap_to_st_pct = round((close_now - st_line_now) / st_line_now * 100, 2)
 
-    cross_gap_pct = round((e50_now - e200_now) / e200_now * 100, 2)
+    # ── Quality score (gates already passed -> now rank) ──
+    score = 3                              # base: all gates passed
+    if fresh_flip:            score += 3
+    if 50 <= rsi_now < 65:    score += 2   # sweet spot
+    elif 65 <= rsi_now <= 75: score += 1
+    if rel_strength > 0:      score += 2
+    if rel_strength > 5:      score += 1
+    if mom_1w > 1.5:          score += 1
+    if from_52w_h >= -10:     score += 1
+    if vol_10d > 1_000_000:   score += 1
 
-    # 5-day momentum
-    mom_5d = round(float((close_s.iloc[-1] / close_s.iloc[-5] - 1) * 100), 2)
-
-    # ── Quality score — gates passed, now rank ──
-    score = 0
-
-    score += 3                              # base: cross + price confirmed
-    if fresh_cross:         score += 3      # freshness premium
-    if 50 < rsi_val < 70:  score += 2      # sweet-spot RSI
-    elif 70 <= rsi_val < 82: score += 1    # extended but not exhausted
-    if rel_strength > 0:   score += 2      # beating Nifty
-    if rel_strength > 5:   score += 1      # strongly outperforming
-    if mom_5d > 1.5:       score += 1      # short-term thrust
-    if from_52w_h >= -10:  score += 1      # near ATH = trend intact
-    if vol_10d > 1_000_000: score += 1     # high liquidity bonus
-
-    # ── Signal ────────────────────────────────
-    if score >= 10 and fresh_cross:
+    if score >= 10 and fresh_flip:
         signal = "🚀 STRONG BUY"
     elif score >= 7:
         signal = "✅ BUY"
     else:
         signal = "👀 WATCH"
 
-    # Swing target: 2.5× ATR (tighter = more conservative)
-    upside_target = round(close_now + 2.5 * atr_val, 2)
-    upside_pct    = round((upside_target / close_now - 1) * 100, 2)
-
     return {
         "ticker":       ticker.replace(".NS", ""),
         "signal":       signal,
         "score":        score,
-        "close":        round(close_now, 2),
-        "ema50":        round(e50_now, 2),
-        "ema200":       round(e200_now, 2),
-        "cross_gap_%":  cross_gap_pct,
-        "fresh_cross":  fresh_cross,
-        "rsi":          round(rsi_val, 2),
+        "close":        round(price_now, 2),
+        "weekly_close": round(close_now, 2),
+        "ema9":         round(ema9_now, 2),
+        "st_line":      round(st_line_now, 2),
+        "gap_to_st_%":  gap_to_st_pct,
+        "fresh_flip":   fresh_flip,
+        "rsi":          round(rsi_now, 2),
         "rs_vs_nifty":  rel_strength,
-        "mom_5d_%":     mom_5d,
+        "mom_1w_%":     mom_1w,
         "from_52wh_%":  from_52w_h,
         "vol_10d_k":    round(vol_10d / 1000, 0),
-        "upside_tgt":   upside_target,
-        "upside_%":     upside_pct,
     }
 
 # ─────────────────────────────────────────────
-#  DEBUG MODE  — shows exactly which gate kills each stock
-#  Run:  python golden_cross_scanner.py --debug
+#  DEBUG MODE — gate-by-gate breakdown for every ticker
 # ─────────────────────────────────────────────
-GATE_LABELS = {
-    "G1": "EMA50 > EMA200  (golden cross)",
-    "G2": "Price > EMA50   (price above short MA)",
-    "G3": "RSI 45–78       (momentum zone)",
-    "G4": "RS vs Nifty > 0 (outperforming index)",
-    "G5": "Within 20% 52wH (trend intact)",
-    "G6": "Vol 10d > 500k  (liquid)",
-}
-
 def debug_gates(mkt_ret: float) -> None:
-    """Print a gate-by-gate breakdown for every ticker. Never sends Telegram."""
     rows = []
     for t in TICKERS:
-        df = get_data(t)
         name = t.replace(".NS", "")
-        if df is None:
+        data = compute_all(t)
+        if data is None:
             rows.append({"ticker": name, "failed": "NO_DATA",
-                         "G1":"?","G2":"?","G3":"?","G4":"?","G5":"?","G6":"?",
+                         **{g: "?" for g in GATE_LABELS},
                          "rsi": "-", "rs": "-", "52wh": "-", "vol_k": "-"})
             continue
+        daily, weekly = data
 
-        close_s = df["Close"].squeeze()
-        vol_s   = df["Volume"].squeeze()
+        close_now   = float(weekly["Close"].iloc[-1])
+        ema9_now    = float(weekly["EMA9"].iloc[-1])
+        sma20_now   = float(weekly["SMA20"].iloc[-1])
+        sma50_now   = float(weekly["SMA50"].iloc[-1])
+        rsi_now     = float(weekly["RSI14"].iloc[-1])
+        st_dir_now  = weekly["ST_dir"].iloc[-1]
 
-        df["EMA50"]  = close_s.ewm(span=50,  adjust=False).mean()
-        df["EMA200"] = close_s.ewm(span=200, adjust=False).mean()
-        df["RSI"]    = rsi(close_s)
+        price_now   = float(daily["Close"].iloc[-1])
+        vol_10d     = float(daily["Volume"].iloc[-10:].mean())
+        vol_20d_avg = float(daily["VOL_SMA20"].iloc[-1])
+        vol_today   = float(daily["Volume"].iloc[-1])
 
-        e50   = float(df["EMA50"].squeeze().iloc[-1])
-        e200  = float(df["EMA200"].squeeze().iloc[-1])
-        rsi_v = float(df["RSI"].iloc[-1])
-        vol   = float(vol_s.iloc[-10:].mean())
-        cmp   = float(close_s.iloc[-1])
-
-        stock_ret = float((close_s.iloc[-1] / close_s.iloc[-20] - 1) * 100)
+        stock_ret = float((daily["Close"].iloc[-1] / daily["Close"].iloc[-20] - 1) * 100)
         rs        = round(stock_ret - mkt_ret, 2)
-        high_52w  = float(df["High"].iloc[-252:].max()) if len(df) >= 252 else float(df["High"].max())
-        from_ath  = round((cmp / high_52w - 1) * 100, 2)
+        high_52w  = float(daily["High"].iloc[-252:].max()) if len(daily) >= 252 else float(daily["High"].max())
+        from_ath  = round((price_now / high_52w - 1) * 100, 2)
 
-        g1 = "✅" if e50 > e200                  else "❌"
-        g2 = "✅" if cmp > e50                   else "❌"
-        g3 = "✅" if 45 <= rsi_v <= 78           else "❌"
-        g4 = "✅" if rs > 0                      else "❌"
-        g5 = "✅" if from_ath >= -20             else "❌"
-        g6 = "✅" if vol >= 500_000              else "❌"
+        g1 = "✅" if st_dir_now == "buy" else "❌"
+        g2 = "✅" if close_now > ema9_now else "❌"
+        g3 = "✅" if price_now > 50 else "❌"
+        g4 = "✅" if vol_10d > 100_000 else "❌"
+        g5 = "✅" if (not pd.isna(vol_20d_avg) and vol_today > 1.2 * vol_20d_avg) else "❌"
+        g6 = "✅" if close_now > sma20_now else "❌"
+        g7 = "✅" if close_now > sma50_now else "❌"
+        g8 = "✅" if 50 <= rsi_now <= 75 else "❌"
 
-        failed = [k for k, v in {"G1":g1,"G2":g2,"G3":g3,"G4":g4,"G5":g5,"G6":g6}.items() if v == "❌"]
+        gates = {"G1": g1, "G2": g2, "G3": g3, "G4": g4, "G5": g5, "G6": g6, "G7": g7, "G8": g8}
+        failed = [k for k, v in gates.items() if v == "❌"]
+
         rows.append({
-            "ticker":  name,
-            "failed":  ",".join(failed) if failed else "NONE — qualifies!",
-            "G1": g1, "G2": g2, "G3": g3, "G4": g4, "G5": g5, "G6": g6,
-            "rsi":   round(rsi_v, 1),
-            "rs":    rs,
-            "52wh":  from_ath,
-            "vol_k": round(vol / 1000, 0),
+            "ticker": name,
+            "failed": ",".join(failed) if failed else "NONE — qualifies!",
+            **gates,
+            "rsi": round(rsi_now, 1) if not pd.isna(rsi_now) else "-",
+            "rs": rs,
+            "52wh": from_ath,
+            "vol_k": round(vol_10d / 1000, 0),
         })
 
     dbg = pd.DataFrame(rows).sort_values("failed")
 
-    # ── summary: which gate kills the most stocks ──
-    print(f"\n{'═'*70}")
-    print(f"  DEBUG — Gate Failure Analysis  |  Nifty 20d RS base: {round(mkt_ret,2):+.2f}%")
-    print(f"{'═'*70}")
+    print(f"\n{'═'*72}")
+    print(f"  DEBUG — Weekly Supertrend(7,2) + EMA9 Gate Analysis  |  Nifty 20d: {round(mkt_ret,2):+.2f}%")
+    print(f"{'═'*72}")
     for gate, label in GATE_LABELS.items():
         fails = dbg[dbg[gate] == "❌"].shape[0]
-        bar   = "█" * (fails // 2)
-        print(f"  {gate}  {label:40s}  {fails:3d} fails  {bar}")
-    print(f"{'─'*70}")
+        bar = "█" * (fails // 2)
+        print(f"  {gate}  {label:35s}  {fails:3d} fails  {bar}")
+    print(f"{'─'*72}")
 
-    # ── stocks closest to passing all gates ──
     dbg["fail_count"] = dbg["failed"].apply(lambda x: 0 if x == "NONE — qualifies!" else len(x.split(",")))
     near_misses = dbg[dbg["fail_count"].between(1, 2)].sort_values("fail_count")
+    winners = dbg[dbg["fail_count"] == 0]
 
     print(f"\n  QUALIFIED  (0 gate failures)")
-    winners = dbg[dbg["fail_count"] == 0]
     if winners.empty:
         print("    — none —")
     else:
@@ -336,85 +511,4 @@ def debug_gates(mkt_ret: float) -> None:
     if near_misses.empty:
         print("    — none —")
     else:
-        for _, r in near_misses.iterrows():
-            print(f"    ✗ {r['ticker']:18s}  FAILED: {r['failed']:20s}  RSI {r['rsi']}  RS {r['rs']:+.1f}%  52wH {r['52wh']}%  Vol {int(r['vol_k'])}k")
-
-    print(f"\n{'═'*70}\n")
-    dbg.to_csv("debug_gates.csv", index=False)
-    print("  Full breakdown saved → debug_gates.csv")
-
-# ─────────────────────────────────────────────
-#  MAIN
-# ─────────────────────────────────────────────
-def run():
-    print("── Golden Cross Scanner (High Conviction) ──")
-    mkt_ret     = market_return()
-    weak_market = mkt_ret < -1
-
-    results = []
-    for t in TICKERS:
-        try:
-            res = analyze(t, mkt_ret)
-            if res:
-                results.append(res)
-                print(f"  ✔ {res['ticker']:18s}  score={res['score']}  {res['signal']}")
-            # else: silently dropped by hard gates
-        except Exception as e:
-            print(f"  Skip {t}: {e}")
-
-    if not results:
-        msg = "Golden Cross Scanner: No high-conviction setups today. Sit tight. 🧘"
-        print(msg)
-        send_telegram(msg)
-        return
-
-    df = pd.DataFrame(results)
-
-    # Penalise in weak market
-    if weak_market:
-        df["score"] = df["score"] - 1
-
-    df = df.sort_values(["score", "rs_vs_nifty"], ascending=False)
-    df.to_csv("scanner_results.csv", index=False)
-
-    # ── Only TRUE buys go to Telegram (score ≥ 7, max 5) ──
-    picks = df[df["score"] >= 7].head(5)
-
-    nifty_tag = f"Nifty 20d: {round(mkt_ret, 2):+.2f}%"
-    if weak_market:
-        nifty_tag += "  ⚠️ Weak market — size down"
-
-    if picks.empty:
-        msg = f"📈 Golden Cross Scanner  |  {nifty_tag}\n\nNo high-conviction buys today. All candidates failed quality gates. Cash is a position. 💰"
-    else:
-        lines = [f"📈 Golden Cross Scanner  |  {nifty_tag}\n"]
-        lines.append(f"{'─'*36}")
-        for rank, (_, r) in enumerate(picks.iterrows(), 1):
-            fresh_tag  = "  ⚡ FRESH CROSS" if r["fresh_cross"] else ""
-            lines.append(
-                f"#{rank}  {r['ticker']}{fresh_tag}\n"
-                f"    {r['signal']}  •  Score {r['score']}\n"
-                f"    CMP ₹{r['close']}  |  EMA50 ₹{r['ema50']}  |  EMA200 ₹{r['ema200']}\n"
-                f"    RSI {r['rsi']}  |  RS {r['rs_vs_nifty']:+.1f}%  |  5d {r['mom_5d_%']:+.1f}%\n"
-                f"    52wH gap {r['from_52wh_%']}%  |  Vol {int(r['vol_10d_k'])}k\n"
-                f"    🎯 Swing tgt ₹{r['upside_tgt']} (+{r['upside_%']}%)\n"
-            )
-        lines.append(f"{'─'*36}")
-        lines.append(f"Scanned {len(TICKERS)} stocks  •  {len(results)} passed gates  •  {len(picks)} actionable")
-        msg = "\n".join(lines)
-
-    print("\n" + msg)
-    send_telegram(msg)
-
-# ─────────────────────────────────────────────
-if __name__ == "__main__":
-    import sys
-    if "--debug" in sys.argv:
-        # Debug mode: no Telegram needed, just prints gate analysis
-        print("Running in DEBUG mode — no Telegram messages will be sent.")
-        mkt_ret = market_return()
-        debug_gates(mkt_ret)
-    else:
-        if not TELEGRAM_TOKEN or not CHAT_ID:
-            raise ValueError("Set BOT_TOKEN and CHAT_ID env vars before running.")
-        run()
+        for
