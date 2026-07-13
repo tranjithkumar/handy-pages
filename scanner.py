@@ -511,4 +511,79 @@ def debug_gates(mkt_ret: float) -> None:
     if near_misses.empty:
         print("    — none —")
     else:
-        for
+        for _, r in near_misses.iterrows():
+            print(f"    ✗ {r['ticker']:18s}  FAILED: {r['failed']:20s}  RSI {r['rsi']}  RS {r['rs']:+.1f}%  52wH {r['52wh']}%  Vol {int(r['vol_k'])}k")
+ 
+    print(f"\n{'═'*72}\n")
+    dbg.to_csv("debug_gates.csv", index=False)
+    print("  Full breakdown saved → debug_gates.csv")
+ 
+# ─────────────────────────────────────────────
+#  MAIN
+# ─────────────────────────────────────────────
+def run():
+    print("── Weekly Supertrend(7,2) + EMA9 Scanner (F&O, High Conviction) ──")
+    mkt_ret     = market_return()
+    weak_market = mkt_ret < -1
+ 
+    results = []
+    for t in TICKERS:
+        try:
+            res = analyze(t, mkt_ret)
+            if res:
+                results.append(res)
+                print(f"  ✔ {res['ticker']:18s}  score={res['score']}  {res['signal']}")
+        except Exception as e:
+            print(f"  Skip {t}: {e}")
+ 
+    if not results:
+        msg = "Weekly Supertrend+EMA9 Scanner: No high-conviction setups today. Sit tight. 🧘"
+        print(msg)
+        send_telegram(msg)
+        return
+ 
+    df = pd.DataFrame(results)
+    if weak_market:
+        df["score"] = df["score"] - 1
+ 
+    df = df.sort_values(["score", "rs_vs_nifty"], ascending=False)
+    df.to_csv("scanner_results.csv", index=False)
+ 
+    picks = df[df["score"] >= 7].head(5)
+ 
+    nifty_tag = f"Nifty 20d: {round(mkt_ret, 2):+.2f}%"
+    if weak_market:
+        nifty_tag += "  ⚠️ Weak market — size down"
+ 
+    if picks.empty:
+        msg = f"📈 Weekly Supertrend+EMA9 Scanner  |  {nifty_tag}\n\nNo high-conviction buys today. All candidates failed quality gates. Cash is a position. 💰"
+    else:
+        lines = [f"📈 Weekly Supertrend(7,2) + EMA9 Scanner  |  {nifty_tag}\n"]
+        lines.append(f"{'─'*36}")
+        for rank, (_, r) in enumerate(picks.iterrows(), 1):
+            fresh_tag = "  ⚡ FRESH FLIP" if r["fresh_flip"] else ""
+            lines.append(
+                f"#{rank}  {r['ticker']}{fresh_tag}\n"
+                f"    {r['signal']}  •  Score {r['score']}\n"
+                f"    CMP ₹{r['close']}  |  Wk Close ₹{r['weekly_close']}  |  EMA9 ₹{r['ema9']}\n"
+                f"    ST line ₹{r['st_line']}  (gap {r['gap_to_st_%']}%)\n"
+                f"    RSI {r['rsi']}  |  RS {r['rs_vs_nifty']:+.1f}%  |  1w {r['mom_1w_%']:+.1f}%\n"
+                f"    52wH gap {r['from_52wh_%']}%  |  Vol {int(r['vol_10d_k'])}k\n"
+            )
+        lines.append(f"{'─'*36}")
+        lines.append(f"Scanned {len(TICKERS)} stocks  •  {len(results)} passed gates  •  {len(picks)} actionable")
+        msg = "\n".join(lines)
+ 
+    print("\n" + msg)
+    send_telegram(msg)
+ 
+# ─────────────────────────────────────────────
+if __name__ == "__main__":
+    if "--debug" in sys.argv:
+        print("Running in DEBUG mode — no Telegram messages will be sent.")
+        mkt_ret = market_return()
+        debug_gates(mkt_ret)
+    else:
+        if not TELEGRAM_TOKEN or not CHAT_ID:
+            raise ValueError("Set BOT_TOKEN and CHAT_ID env vars before running.")
+        run()
