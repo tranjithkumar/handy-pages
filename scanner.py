@@ -20,6 +20,12 @@ import requests
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
+MARKET_CLOSE_HOUR_IST = 15
+MARKET_CLOSE_MIN_IST  = 30
 
 # ─────────────────────────────────────────────
 #  CONFIG
@@ -193,9 +199,31 @@ def get_daily(ticker: str) -> pd.DataFrame | None:
         # yfinance sometimes returns MultiIndex columns for single tickers
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
+
+        df = drop_incomplete_today(df)
         return df
     except Exception:
         return None
+
+
+def drop_incomplete_today(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    If the last row is TODAY and the NSE market hasn't closed yet (15:30 IST),
+    drop it. yfinance returns a live/partial candle for the current session
+    while the market is open — its Volume is only 'so far today', which makes
+    same-day-vs-20d-average volume checks fail almost every stock even when
+    the real setup is fine. Running the scanner after close (or on a day it
+    already closed) is unaffected by this.
+    """
+    if df.empty:
+        return df
+    now_ist = datetime.now(IST)
+    last_bar_date = df.index[-1].date()
+    if last_bar_date == now_ist.date():
+        market_closed = (now_ist.hour, now_ist.minute) >= (MARKET_CLOSE_HOUR_IST, MARKET_CLOSE_MIN_IST)
+        if not market_closed:
+            df = df.iloc[:-1]
+    return df
 
 
 def to_weekly(df: pd.DataFrame) -> pd.DataFrame:
@@ -368,8 +396,11 @@ def analyze(ticker: str, mkt_ret: float) -> dict | None:
     if close_now <= ema9_now:                      return None   # G2
     if price_now <= 50:                            return None   # G3
     if vol_10d <= 100_000:                          return None   # G4
-    if pd.isna(vol_20d_avg) or vol_today <= 1.2 * vol_20d_avg:
-        return None                                              # G5
+    # G5: recent volume trend vs longer average — trailing 10d avg vs 20d avg
+    # (not a single day's volume) so a partial/quiet session doesn't wipe out
+    # an otherwise valid setup.
+    if pd.isna(vol_20d_avg) or vol_10d <= 1.1 * vol_20d_avg:
+        return None
     if close_now <= sma20_now:                      return None   # G6
     if close_now <= sma50_now:                       return None   # G7
     if not (50 <= rsi_now <= 75):                    return None   # G8
@@ -467,7 +498,7 @@ def debug_gates(mkt_ret: float) -> None:
         g2 = "✅" if close_now > ema9_now else "❌"
         g3 = "✅" if price_now > 50 else "❌"
         g4 = "✅" if vol_10d > 100_000 else "❌"
-        g5 = "✅" if (not pd.isna(vol_20d_avg) and vol_today > 1.2 * vol_20d_avg) else "❌"
+        g5 = "✅" if (not pd.isna(vol_20d_avg) and vol_10d > 1.1 * vol_20d_avg) else "❌"
         g6 = "✅" if close_now > sma20_now else "❌"
         g7 = "✅" if close_now > sma50_now else "❌"
         g8 = "✅" if 50 <= rsi_now <= 75 else "❌"
@@ -484,9 +515,9 @@ def debug_gates(mkt_ret: float) -> None:
             "52wh": from_ath,
             "vol_k": round(vol_10d / 1000, 0),
         })
-
+ 
     dbg = pd.DataFrame(rows).sort_values("failed")
-
+ 
     print(f"\n{'═'*72}")
     print(f"  DEBUG — Weekly Supertrend(7,2) + EMA9 Gate Analysis  |  Nifty 20d: {round(mkt_ret,2):+.2f}%")
     print(f"{'═'*72}")
@@ -495,18 +526,18 @@ def debug_gates(mkt_ret: float) -> None:
         bar = "█" * (fails // 2)
         print(f"  {gate}  {label:35s}  {fails:3d} fails  {bar}")
     print(f"{'─'*72}")
-
+ 
     dbg["fail_count"] = dbg["failed"].apply(lambda x: 0 if x == "NONE — qualifies!" else len(x.split(",")))
     near_misses = dbg[dbg["fail_count"].between(1, 2)].sort_values("fail_count")
     winners = dbg[dbg["fail_count"] == 0]
-
+ 
     print(f"\n  QUALIFIED  (0 gate failures)")
     if winners.empty:
         print("    — none —")
     else:
         for _, r in winners.iterrows():
             print(f"    ✔ {r['ticker']:18s}  RSI {r['rsi']}  RS {r['rs']:+.1f}%  52wH {r['52wh']}%  Vol {int(r['vol_k'])}k")
-
+ 
     print(f"\n  NEAR MISSES  (1–2 gate failures)")
     if near_misses.empty:
         print("    — none —")
@@ -522,7 +553,6 @@ def debug_gates(mkt_ret: float) -> None:
 #  MAIN
 # ─────────────────────────────────────────────
 def run():
-    print("── Weekly Supertrend(7,2) + EMA9 Scanner (F&O, High Conviction) ──")
     mkt_ret     = market_return()
     weak_market = mkt_ret < -1
  
@@ -537,7 +567,7 @@ def run():
             print(f"  Skip {t}: {e}")
  
     if not results:
-        msg = "Weekly Supertrend+EMA9 Scanner: No high-conviction setups today. Sit tight. 🧘"
+        msg = "No high-conviction setups today. Sit tight. 🧘"
         print(msg)
         send_telegram(msg)
         return
@@ -551,15 +581,10 @@ def run():
  
     picks = df[df["score"] >= 7].head(5)
  
-    nifty_tag = f"Nifty 20d: {round(mkt_ret, 2):+.2f}%"
-    if weak_market:
-        nifty_tag += "  ⚠️ Weak market — size down"
- 
     if picks.empty:
-        msg = f"📈 Weekly Supertrend+EMA9 Scanner  |  {nifty_tag}\n\nNo high-conviction buys today. All candidates failed quality gates. Cash is a position. 💰"
+        msg = "No high-conviction setups today. Sit tight. 🧘"
     else:
-        lines = [f"📈 Weekly Supertrend(7,2) + EMA9 Scanner  |  {nifty_tag}\n"]
-        lines.append(f"{'─'*36}")
+        lines = []
         for rank, (_, r) in enumerate(picks.iterrows(), 1):
             fresh_tag = "  ⚡ FRESH FLIP" if r["fresh_flip"] else ""
             lines.append(
@@ -570,8 +595,6 @@ def run():
                 f"    RSI {r['rsi']}  |  RS {r['rs_vs_nifty']:+.1f}%  |  1w {r['mom_1w_%']:+.1f}%\n"
                 f"    52wH gap {r['from_52wh_%']}%  |  Vol {int(r['vol_10d_k'])}k\n"
             )
-        lines.append(f"{'─'*36}")
-        lines.append(f"Scanned {len(TICKERS)} stocks  •  {len(results)} passed gates  •  {len(picks)} actionable")
         msg = "\n".join(lines)
  
     print("\n" + msg)
