@@ -1,4 +1,4 @@
-# Gap-RSI Scan Result — 2026-08-10 05:23 IST
+# Gap-RSI Scan Result — 2026-08-17 04:36 IST
 
 Scanned **200** F&O symbols.
 
