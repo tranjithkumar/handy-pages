@@ -48,6 +48,15 @@ HEADERS = {
     ),
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "X-Requested-With": "XMLHttpRequest",
+    "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
     "Referer": "https://www.nseindia.com/market-data/live-market-indices/heatmap",
 }
 
@@ -71,29 +80,44 @@ class NSESession:
         self._warm_up()
 
     def _warm_up(self):
-        # NSE requires a visit to a normal page first to set cookies,
-        # otherwise the API endpoints return 401/403.
-        try:
-            self.s.get(BASE, timeout=10)
-            time.sleep(1)
-            self.s.get(f"{BASE}/market-data/live-market-indices/heatmap", timeout=10)
-            time.sleep(1)
-        except requests.RequestException as e:
-            print(f"[warn] warm-up request failed: {e}", file=sys.stderr)
+        # NSE requires visits to normal pages first to set cookies, otherwise
+        # the API endpoints return 401/403. Different endpoints seem to want
+        # different "referring" pages to have been visited, so touch a few.
+        pages = [
+            BASE,
+            f"{BASE}/market-data/live-market-indices/heatmap",
+            f"{BASE}/market-data/live-equity-market",
+        ]
+        for page in pages:
+            try:
+                self.s.get(page, timeout=10)
+                time.sleep(1)
+            except requests.RequestException as e:
+                print(f"[warn] warm-up request to {page} failed: {e}", file=sys.stderr)
 
-    def get_json(self, path, params=None, retries=3):
+    def get_json(self, path, params=None, retries=4):
         url = f"{BASE}{path}"
+        last_status = None
         for attempt in range(retries):
             try:
                 r = self.s.get(url, params=params, timeout=10)
+                last_status = r.status_code
                 if r.status_code == 200:
-                    return r.json()
+                    try:
+                        return r.json()
+                    except ValueError:
+                        print(f"[warn] Got 200 but non-JSON body from {url} (likely a block page).",
+                              file=sys.stderr)
                 # session likely expired / blocked -> refresh and retry
                 self._warm_up()
             except requests.RequestException as e:
                 print(f"[warn] request failed ({e}), retrying...", file=sys.stderr)
-            time.sleep(1.5 * (attempt + 1))
-        raise RuntimeError(f"Failed to fetch {url} after {retries} retries")
+            time.sleep(2 * (attempt + 1))
+        raise RuntimeError(
+            f"Failed to fetch {url} after {retries} retries (last HTTP status: {last_status}). "
+            "NSE may be blocking this runner's IP address (common for datacenter/cloud IPs, "
+            "including GitHub-hosted Actions runners), independent of headers/cookies."
+        )
 
 
 def find_top_broad_market_index(sess: NSESession) -> str:
