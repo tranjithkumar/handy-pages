@@ -97,6 +97,60 @@ INDEX_UNIVERSES = {
     "NIFTY NEXT 50": NIFTY_NEXT_50_SYMBOLS,
 }
 
+# NSE publishes constituent lists as plain CSVs on this archive subdomain.
+# It's sometimes (not always) reachable even when the live JSON API
+# (nseindia.com/api/...) is blocked for cloud/datacenter IPs. We try this
+# first and silently fall back to the hardcoded lists above if it fails,
+# so the hardcoded lists are a safety net, not the primary source.
+NSE_ARCHIVE_CSV_URLS = {
+    "NIFTY 50": "https://archives.nseindia.com/content/indices/ind_nifty50list.csv",
+    "NIFTY NEXT 50": "https://archives.nseindia.com/content/indices/ind_niftynext50list.csv",
+}
+
+
+def try_fetch_live_constituents(index_name: str, timeout: int = 8):
+    """Attempts to fetch the current constituent list straight from NSE's
+    CSV archive. Returns a list of symbols, or None if it fails for any
+    reason (caller should fall back to the hardcoded list)."""
+    url = NSE_ARCHIVE_CSV_URLS.get(index_name)
+    if not url:
+        return None
+    try:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/csv,*/*",
+        }
+        r = requests.get(url, headers=headers, timeout=timeout)
+        if r.status_code != 200:
+            return None
+        from io import StringIO
+        df = pd.read_csv(StringIO(r.text))
+        symbol_col = next((c for c in df.columns if c.strip().lower() == "symbol"), None)
+        if not symbol_col:
+            return None
+        symbols = df[symbol_col].dropna().astype(str).str.strip().tolist()
+        if len(symbols) < 10:  # sanity check -- a real index list has way more than this
+            return None
+        return symbols
+    except Exception:
+        return None
+
+
+def get_index_universe(index_name: str, allow_live_fetch: bool = True):
+    """Returns the symbol list for an index: live-fetched from NSE if
+    possible, otherwise the hardcoded fallback list."""
+    if allow_live_fetch:
+        live = try_fetch_live_constituents(index_name)
+        if live:
+            print(f"  [{index_name}] using LIVE constituent list ({len(live)} symbols) from NSE archive.")
+            return live
+        print(f"  [{index_name}] live fetch failed/blocked, using built-in fallback list "
+              f"({len(INDEX_UNIVERSES[index_name])} symbols).")
+    return INDEX_UNIVERSES[index_name]
+
 
 def send_telegram_message(text: str):
     """Sends a message via the Telegram Bot API. Splits long messages
@@ -176,11 +230,11 @@ def fetch_all_history(symbols, period="4mo"):
     return data
 
 
-def find_top_index(data: pd.DataFrame) -> str:
+def find_top_index(data: pd.DataFrame, universes: dict) -> str:
     """Picks the index whose constituents have the highest average
     day-over-day % change today (a proxy for 'which index is hottest')."""
     scores = {}
-    for index_name, symbols in INDEX_UNIVERSES.items():
+    for index_name, symbols in universes.items():
         pct_changes = []
         for symbol in symbols:
             ticker = f"{symbol}.NS"
@@ -277,8 +331,11 @@ def main():
     parser.add_argument("--gap", type=float, default=0.01, help="Gap %% threshold (default 0.01)")
     args = parser.parse_args()
 
+    print("Resolving index constituent lists (live fetch, falling back to built-in lists if blocked)...")
+    live_universes = {name: get_index_universe(name) for name in INDEX_UNIVERSES}
+
     # Download history for every symbol across every tracked index in one batch.
-    all_symbols = sorted(set(s for syms in INDEX_UNIVERSES.values() for s in syms))
+    all_symbols = sorted(set(s for syms in live_universes.values() for s in syms))
     data = fetch_all_history(all_symbols)
 
     if args.index:
@@ -287,13 +344,13 @@ def main():
             print(f"Unknown index '{index_name}'. Choices: {list(INDEX_UNIVERSES.keys())}", file=sys.stderr)
             sys.exit(1)
     else:
-        print("Comparing today's performance across tracked indices...")
-        index_name = find_top_index(data)
+        print("\nComparing today's performance across tracked indices...")
+        index_name = find_top_index(data, live_universes)
 
     print(f"\nScreening constituents of: {index_name}")
     print(f"Filters -> Open>LTP, Gap%>{args.gap}, RSI>{args.rsi}, VolChg%>{args.volchg}\n")
 
-    df = screen(INDEX_UNIVERSES[index_name], data, args.rsi, args.volchg, args.gap)
+    df = screen(live_universes[index_name], data, args.rsi, args.volchg, args.gap)
 
     print("\n" + "=" * 60)
     if df.empty:
