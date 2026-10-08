@@ -18,11 +18,12 @@ bot-detection, regardless of headers/cookies used. Yahoo Finance's public
 data endpoints (via the `yfinance` package) are free and generally
 reachable from cloud runners, so this uses that instead.
 
-Currently tracked indices: NIFTY 50, NIFTY NEXT 50 (both with officially
-sourced, dated constituent lists -- see INDEX_UNIVERSES below). More
-indices (Midcap 50, Smallcap 50, etc.) can be added once their constituent
-lists are verified; get the mapping wrong and the screen silently runs on
-the wrong stocks, so new indices are added deliberately, not guessed.
+Currently tracked indices: NIFTY 200, NIFTY MIDCAP 150. Constituents are
+fetched live every run from NSE's CSV archive (see NSE_ARCHIVE_CSV_URLS
+below) -- no stale hardcoded list, since these are large (150-200 stock)
+indices that would be impractical to maintain by hand. If NSE blocks this
+archive endpoint, the script fails loudly rather than silently falling
+back to a wrong/incomplete list.
 
 Filters applied
 -----------------
@@ -62,56 +63,24 @@ TELEGRAM_CHAT_ID = os.environ.get("CHAT_ID")
 
 # --- Index universes -------------------------------------------------------
 # .NS suffix is Yahoo Finance's convention for NSE-listed stocks.
-# Sourced from official NSE-published constituent PDFs (dated below).
-# NSE rebalances these lists around 31-Jan and 31-Jul each year -- refresh
-# periodically if it drifts.
+# These are large lists (200 / 150 stocks), so unlike earlier versions of
+# this script there's no hardcoded fallback copy -- that's too big to
+# maintain reliably by hand. Constituents are fetched LIVE every run from
+# NSE's CSV archive, which has proven reachable from this GitHub Actions
+# runner. If NSE ever blocks this endpoint too, the script fails loudly
+# (see get_index_universe) rather than silently screening a stale/wrong list.
 
-# NIFTY 50 as of 17-Aug-2026
-NIFTY_50_SYMBOLS = [
-    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
-    "BAJAJ-AUTO", "BAJAJFINSV", "BAJFINANCE", "BEL", "BHARTIARTL",
-    "CIPLA", "COALINDIA", "DRREDDY", "EICHERMOT", "ETERNAL", "GRASIM",
-    "HCLTECH", "HDFCBANK", "HDFCLIFE", "HINDALCO", "HINDUNILVR",
-    "ICICIBANK", "INDIGO", "INFY", "ITC", "JIOFIN", "JSWSTEEL",
-    "KOTAKBANK", "LT", "M&M", "MARUTI", "MAXHEALTH", "NESTLEIND",
-    "NTPC", "ONGC", "POWERGRID", "RELIANCE", "SBILIFE", "SBIN",
-    "SHRIRAMFIN", "SUNPHARMA", "TATACONSUM", "TATASTEEL", "TCS",
-    "TECHM", "TITAN", "TATAMOTORS", "TRENT", "ULTRACEMCO", "WIPRO",
-]
-
-# NIFTY NEXT 50 as of 30-Mar-2026
-NIFTY_NEXT_50_SYMBOLS = [
-    "ABB", "ADANIENSOL", "ADANIGREEN", "ADANIPOWER", "AMBUJACEM",
-    "BAJAJHLDNG", "BANKBARODA", "BOSCHLTD", "BPCL", "BRITANNIA",
-    "CANBK", "CGPOWER", "CHOLAFIN", "CUMMINSIND", "DIVISLAB", "DLF",
-    "DMART", "SIEMENSENERGY", "GAIL", "GODREJCP", "HAL", "HDFCAMC",
-    "HINDZINC", "HYUNDAI", "INDHOTEL", "IOC", "IRFC", "JINDALSTEL",
-    "LODHA", "LTIM", "MAZDOCK", "MOTHERSON", "MUTHOOTFIN", "PFC",
-    "PIDILITIND", "PNB", "RECLTD", "SHREECEM", "SIEMENS", "SOLARINDS",
-    "TATACAPITAL", "TATAPOWER", "TATAMOTORS", "TORNTPHARM", "TVSMOTOR",
-    "UNIONBANK", "MCDOWELL-N", "VBL", "VEDL", "ZYDUSLIFE",
-]
-
-INDEX_UNIVERSES = {
-    "NIFTY 50": NIFTY_50_SYMBOLS,
-    "NIFTY NEXT 50": NIFTY_NEXT_50_SYMBOLS,
-}
-
-# NSE publishes constituent lists as plain CSVs on this archive subdomain.
-# It's sometimes (not always) reachable even when the live JSON API
-# (nseindia.com/api/...) is blocked for cloud/datacenter IPs. We try this
-# first and silently fall back to the hardcoded lists above if it fails,
-# so the hardcoded lists are a safety net, not the primary source.
 NSE_ARCHIVE_CSV_URLS = {
-    "NIFTY 50": "https://archives.nseindia.com/content/indices/ind_nifty50list.csv",
-    "NIFTY NEXT 50": "https://archives.nseindia.com/content/indices/ind_niftynext50list.csv",
+    "NIFTY 200": "https://archives.nseindia.com/content/indices/ind_nifty200list.csv",
+    "NIFTY MIDCAP 150": "https://archives.nseindia.com/content/indices/ind_niftymidcap150list.csv",
 }
 
+INDEX_UNIVERSES = list(NSE_ARCHIVE_CSV_URLS.keys())
 
-def try_fetch_live_constituents(index_name: str, timeout: int = 8):
-    """Attempts to fetch the current constituent list straight from NSE's
-    CSV archive. Returns a list of symbols, or None if it fails for any
-    reason (caller should fall back to the hardcoded list)."""
+
+def try_fetch_live_constituents(index_name: str, timeout: int = 10):
+    """Fetches the current constituent list straight from NSE's CSV archive.
+    Returns a list of symbols, or None if it fails for any reason."""
     url = NSE_ARCHIVE_CSV_URLS.get(index_name)
     if not url:
         return None
@@ -132,24 +101,25 @@ def try_fetch_live_constituents(index_name: str, timeout: int = 8):
         if not symbol_col:
             return None
         symbols = df[symbol_col].dropna().astype(str).str.strip().tolist()
-        if len(symbols) < 10:  # sanity check -- a real index list has way more than this
+        if len(symbols) < 30:  # sanity check -- these indices have 150-200 names
             return None
         return symbols
     except Exception:
         return None
 
 
-def get_index_universe(index_name: str, allow_live_fetch: bool = True):
-    """Returns the symbol list for an index: live-fetched from NSE if
-    possible, otherwise the hardcoded fallback list."""
-    if allow_live_fetch:
-        live = try_fetch_live_constituents(index_name)
-        if live:
-            print(f"  [{index_name}] using LIVE constituent list ({len(live)} symbols) from NSE archive.")
-            return live
-        print(f"  [{index_name}] live fetch failed/blocked, using built-in fallback list "
-              f"({len(INDEX_UNIVERSES[index_name])} symbols).")
-    return INDEX_UNIVERSES[index_name]
+def get_index_universe(index_name: str):
+    """Returns the live symbol list for an index. Raises if NSE's archive
+    is unreachable -- there is no stale fallback for these large indices."""
+    live = try_fetch_live_constituents(index_name)
+    if live:
+        print(f"  [{index_name}] using LIVE constituent list ({len(live)} symbols) from NSE archive.")
+        return live
+    raise RuntimeError(
+        f"Could not fetch live constituents for '{index_name}' from NSE's archive "
+        f"({NSE_ARCHIVE_CSV_URLS[index_name]}). NSE may be blocking this runner, "
+        "or the file format/URL has changed."
+    )
 
 
 def send_telegram_message(text: str):
@@ -325,13 +295,13 @@ def main():
     parser = argparse.ArgumentParser(description="NSE swing trade screener (Yahoo Finance)")
     parser.add_argument("--index", type=str, default=None,
                          help="Force a specific index instead of auto-detecting the top one "
-                              f"(choices: {list(INDEX_UNIVERSES.keys())})")
+                              f"(choices: {INDEX_UNIVERSES})")
     parser.add_argument("--rsi", type=float, default=60, help="RSI(14) threshold (default 60)")
     parser.add_argument("--volchg", type=float, default=100, help="Volume change %% threshold (default 100)")
     parser.add_argument("--gap", type=float, default=0.01, help="Gap %% threshold (default 0.01)")
     args = parser.parse_args()
 
-    print("Resolving index constituent lists (live fetch, falling back to built-in lists if blocked)...")
+    print("Fetching live index constituent lists from NSE...")
     live_universes = {name: get_index_universe(name) for name in INDEX_UNIVERSES}
 
     # Download history for every symbol across every tracked index in one batch.
@@ -341,7 +311,7 @@ def main():
     if args.index:
         index_name = args.index.upper()
         if index_name not in INDEX_UNIVERSES:
-            print(f"Unknown index '{index_name}'. Choices: {list(INDEX_UNIVERSES.keys())}", file=sys.stderr)
+            print(f"Unknown index '{index_name}'. Choices: {INDEX_UNIVERSES}", file=sys.stderr)
             sys.exit(1)
     else:
         print("\nComparing today's performance across tracked indices...")
