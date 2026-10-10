@@ -235,16 +235,24 @@ def find_top_index(data: pd.DataFrame, universes: dict) -> str:
 
 def screen(symbols, data, rsi_thresh, volchg_thresh, gap_thresh):
     results = []
+    # Diagnostic counters so it's visible WHERE candidates get filtered out,
+    # instead of just seeing a final count of 0.
+    stats = {
+        "total": 0, "no_data": 0, "passed_open_gap": 0,
+        "passed_rsi": 0, "passed_all": 0,
+    }
 
     for symbol in symbols:
+        stats["total"] += 1
         ticker = f"{symbol}.NS"
         try:
             df = data[ticker].dropna(how="all")
         except KeyError:
-            print(f"[warn] No data returned for {ticker}, skipping.")
+            stats["no_data"] += 1
             continue
 
         if df.empty or len(df) < 16:
+            stats["no_data"] += 1
             continue
 
         today = df.iloc[-1]
@@ -270,12 +278,18 @@ def screen(symbols, data, rsi_thresh, volchg_thresh, gap_thresh):
         # Cheap filters first
         if not (open_p > close_p and gap_pct > gap_thresh):
             continue
+        stats["passed_open_gap"] += 1
 
         rsi = compute_rsi(df["Close"])
         if pd.isna(rsi):
             continue
+        if rsi > rsi_thresh:
+            stats["passed_rsi"] += 1
+        else:
+            continue
 
-        if rsi > rsi_thresh and vol_chg > volchg_thresh:
+        if vol_chg > volchg_thresh:
+            stats["passed_all"] += 1
             results.append({
                 "Symbol": symbol,
                 "Open": round(float(open_p), 2),
@@ -287,6 +301,12 @@ def screen(symbols, data, rsi_thresh, volchg_thresh, gap_thresh):
                 "VolChg%": round(vol_chg, 2),
             })
 
+    print(f"\n[diagnostic] {stats['total']} stocks checked, "
+          f"{stats['no_data']} had no/insufficient data, "
+          f"{stats['passed_open_gap']} passed Open>LTP & Gap% filter, "
+          f"{stats['passed_rsi']} of those also passed RSI filter, "
+          f"{stats['passed_all']} passed all filters (incl. VolChg%).")
+
     return pd.DataFrame(results).sort_values("VolChg%", ascending=False).reset_index(drop=True) \
         if results else pd.DataFrame()
 
@@ -296,8 +316,8 @@ def main():
     parser.add_argument("--index", type=str, default=None,
                          help="Force a specific index instead of auto-detecting the top one "
                               f"(choices: {INDEX_UNIVERSES})")
-    parser.add_argument("--rsi", type=float, default=60, help="RSI(14) threshold (default 60)")
-    parser.add_argument("--volchg", type=float, default=100, help="Volume change %% threshold (default 100)")
+    parser.add_argument("--rsi", type=float, default=55, help="RSI(14) threshold (default 55)")
+    parser.add_argument("--volchg", type=float, default=50, help="Volume change %% threshold (default 50)")
     parser.add_argument("--gap", type=float, default=0.01, help="Gap %% threshold (default 0.01)")
     args = parser.parse_args()
 
