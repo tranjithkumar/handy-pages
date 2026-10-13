@@ -25,12 +25,19 @@ indices that would be impractical to maintain by hand. If NSE blocks this
 archive endpoint, the script fails loudly rather than silently falling
 back to a wrong/incomplete list.
 
-Filters applied
------------------
-  - Open > LTP         -> today's Open is above today's Close (pulled back / red day)
-  - Gap % > threshold   -> (Open - PrevClose) / PrevClose * 100
-  - RSI(14) > threshold -> daily RSI from closing prices
-  - Vol chg % > threshold -> today's volume vs YESTERDAY's volume (previous trading day)
+Two swing setups are screened in parallel, each with its own heading in
+the output and Telegram message:
+
+  Pullback-buy       -> gapped up, then faded to close below the open
+                         (cheaper entry within an uptrend), RSI still
+                         reasonably bullish, elevated volume.
+  Momentum breakout   -> closed green with strong RSI and a clear volume
+                         pickup -- actively breaking out with conviction.
+
+Shared metric definitions:
+  - Gap %      -> (Open - PrevClose) / PrevClose * 100
+  - RSI(14)    -> daily RSI from closing prices
+  - Vol chg %  -> today's volume vs YESTERDAY's volume (previous trading day)
 
 This is a research/screening tool, NOT investment advice. Always do your
 own due diligence before trading.
@@ -38,8 +45,8 @@ own due diligence before trading.
 Usage
 -----
     python3 nse_swing_screener.py
-    python3 nse_swing_screener.py --rsi 60 --volchg 100 --gap 0.01
-    python3 nse_swing_screener.py --index "NIFTY 50"   # skip auto-detect
+    python3 nse_swing_screener.py --rsi-pullback 50 --rsi-breakout 60 --volchg 50 --gap 0.01
+    python3 nse_swing_screener.py --index "NIFTY 200"   # skip auto-detect
 
 Environment variables (for Telegram notification)
 --------------------------------------------------
@@ -152,23 +159,38 @@ def send_telegram_message(text: str):
         time.sleep(0.5)
 
 
-def format_results_message(index_name: str, df: pd.DataFrame, rsi_thresh, volchg_thresh, gap_thresh) -> str:
+def _format_section(title: str, filters_desc: str, df: pd.DataFrame) -> str:
+    lines = [f"*{title}*", f"_{filters_desc}_"]
+    if df.empty:
+        lines.append("No matches.")
+    else:
+        lines.append(f"{len(df)} match(es):")
+        for _, row in df.iterrows():
+            lines.append(
+                f"*{row['Symbol']}*  LTP {row['LTP']}  "
+                f"Gap {row['Gap%']}%  RSI {row['RSI(14)']}  Vol {row['VolChg%']}%"
+            )
+    return "\n".join(lines)
+
+
+def format_results_message(index_name: str, pullback_df: pd.DataFrame, breakout_df: pd.DataFrame,
+                            rsi_pullback, rsi_breakout, volchg_thresh, gap_thresh) -> str:
     header = (
         f"*NSE Swing Screener*\n"
         f"Index: `{index_name}`\n"
-        f"Filters: Open>LTP, Gap%>{gap_thresh}, RSI>{rsi_thresh}, VolChg%>{volchg_thresh}\n"
         f"Run: {datetime.now().strftime('%Y-%m-%d %H:%M')} IST\n\n"
     )
-    if df.empty:
-        return header + "No stocks matched all filters this run."
-
-    lines = [f"{len(df)} match(es):\n"]
-    for _, row in df.iterrows():
-        lines.append(
-            f"*{row['Symbol']}*  LTP {row['LTP']}  "
-            f"Gap {row['Gap%']}%  RSI {row['RSI(14)']}  Vol {row['VolChg%']}%"
-        )
-    return header + "\n".join(lines)
+    pullback_section = _format_section(
+        "Pullback-buy",
+        f"Open>LTP (faded), Gap%>{gap_thresh}, RSI>{rsi_pullback}, VolChg%>{volchg_thresh}",
+        pullback_df,
+    )
+    breakout_section = _format_section(
+        "Momentum breakout",
+        f"Close>Open (green), RSI>{rsi_breakout}, VolChg%>{volchg_thresh}",
+        breakout_df,
+    )
+    return header + pullback_section + "\n\n" + breakout_section
 
 
 def compute_rsi(closes: pd.Series, period: int = 14) -> float:
@@ -177,11 +199,20 @@ def compute_rsi(closes: pd.Series, period: int = 14) -> float:
     delta = closes.diff().dropna()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    return float(rsi.iloc[-1])
+    avg_gain = gain.rolling(period).mean().iloc[-1]
+    avg_loss = loss.rolling(period).mean().iloc[-1]
+
+    if pd.isna(avg_gain) or pd.isna(avg_loss):
+        return np.nan
+    if avg_loss == 0 and avg_gain == 0:
+        return 50.0  # perfectly flat window -- neutral
+    if avg_loss == 0:
+        return 100.0  # no down days at all -- maximally overbought/strong
+    if avg_gain == 0:
+        return 0.0  # no up days at all -- maximally oversold/weak
+
+    rs = avg_gain / avg_loss
+    return float(100 - (100 / (1 + rs)))
 
 
 def fetch_all_history(symbols, period="4mo"):
@@ -233,26 +264,23 @@ def find_top_index(data: pd.DataFrame, universes: dict) -> str:
     return top_index
 
 
-def screen(symbols, data, rsi_thresh, volchg_thresh, gap_thresh):
-    results = []
-    # Diagnostic counters so it's visible WHERE candidates get filtered out,
-    # instead of just seeing a final count of 0.
-    stats = {
-        "total": 0, "no_data": 0, "passed_open_gap": 0,
-        "passed_rsi": 0, "passed_all": 0,
-    }
+def compute_all_metrics(symbols, data):
+    """One pass over every symbol computing the shared metrics both setups
+    need (gap%, vol chg%, RSI, etc). Returns a list of dicts; each setup's
+    filter function below just applies its own conditions to this list."""
+    metrics = []
+    no_data = 0
 
     for symbol in symbols:
-        stats["total"] += 1
         ticker = f"{symbol}.NS"
         try:
             df = data[ticker].dropna(how="all")
         except KeyError:
-            stats["no_data"] += 1
+            no_data += 1
             continue
 
         if df.empty or len(df) < 16:
-            stats["no_data"] += 1
+            no_data += 1
             continue
 
         today = df.iloc[-1]
@@ -271,44 +299,74 @@ def screen(symbols, data, rsi_thresh, volchg_thresh, gap_thresh):
         if prev_close == 0 or prev_vol == 0:
             continue
 
-        gap_pct = (open_p - prev_close) / prev_close * 100
-        vol_chg = (today_vol - prev_vol) / prev_vol * 100
-        chg_pct = (close_p - prev_close) / prev_close * 100
-
-        # Cheap filters first
-        if not (open_p > close_p and gap_pct > gap_thresh):
-            continue
-        stats["passed_open_gap"] += 1
-
         rsi = compute_rsi(df["Close"])
         if pd.isna(rsi):
             continue
-        if rsi > rsi_thresh:
-            stats["passed_rsi"] += 1
-        else:
+
+        metrics.append({
+            "Symbol": symbol,
+            "Open": float(open_p),
+            "Close": float(close_p),
+            "PrevClose": float(prev_close),
+            "Gap%": (open_p - prev_close) / prev_close * 100,
+            "VolChg%": (today_vol - prev_vol) / prev_vol * 100,
+            "Chg%": (close_p - prev_close) / prev_close * 100,
+            "RSI(14)": rsi,
+        })
+
+    print(f"[diagnostic] {len(symbols)} stocks in universe, {no_data} had no/insufficient data, "
+          f"{len(metrics)} had usable metrics computed.")
+    return metrics
+
+
+def _to_result_df(rows):
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    for col in ["Open", "Close", "PrevClose", "Gap%", "VolChg%", "Chg%", "RSI(14)"]:
+        df[col] = df[col].round(2)
+    df = df.rename(columns={"Close": "LTP"})
+    return df.sort_values("VolChg%", ascending=False).reset_index(drop=True)
+
+
+def filter_pullback_buy(metrics, rsi_thresh, volchg_thresh, gap_thresh):
+    """Gapped up, then faded to close below the open (cheaper entry within
+    an uptrend), but RSI still reasonably bullish."""
+    passed_gap = 0
+    passed_rsi = 0
+    rows = []
+    for m in metrics:
+        if not (m["Open"] > m["Close"] and m["Gap%"] > gap_thresh):
             continue
+        passed_gap += 1
+        if m["RSI(14)"] <= rsi_thresh:
+            continue
+        passed_rsi += 1
+        if m["VolChg%"] > volchg_thresh:
+            rows.append(m)
+    print(f"[diagnostic:pullback] {passed_gap} passed Open>LTP & Gap% filter, "
+          f"{passed_rsi} of those also passed RSI filter, {len(rows)} passed all filters.")
+    return _to_result_df(rows)
 
-        if vol_chg > volchg_thresh:
-            stats["passed_all"] += 1
-            results.append({
-                "Symbol": symbol,
-                "Open": round(float(open_p), 2),
-                "LTP": round(float(close_p), 2),
-                "PrevClose": round(float(prev_close), 2),
-                "Chg%": round(chg_pct, 2),
-                "Gap%": round(gap_pct, 2),
-                "RSI(14)": round(rsi, 2),
-                "VolChg%": round(vol_chg, 2),
-            })
 
-    print(f"\n[diagnostic] {stats['total']} stocks checked, "
-          f"{stats['no_data']} had no/insufficient data, "
-          f"{stats['passed_open_gap']} passed Open>LTP & Gap% filter, "
-          f"{stats['passed_rsi']} of those also passed RSI filter, "
-          f"{stats['passed_all']} passed all filters (incl. VolChg%).")
-
-    return pd.DataFrame(results).sort_values("VolChg%", ascending=False).reset_index(drop=True) \
-        if results else pd.DataFrame()
+def filter_momentum_breakout(metrics, rsi_thresh, volchg_thresh):
+    """Closed green with strong RSI and a clear pickup in volume --
+    a stock actively breaking out with conviction, not fading."""
+    passed_green = 0
+    passed_rsi = 0
+    rows = []
+    for m in metrics:
+        if not (m["Close"] > m["Open"]):
+            continue
+        passed_green += 1
+        if m["RSI(14)"] <= rsi_thresh:
+            continue
+        passed_rsi += 1
+        if m["VolChg%"] > volchg_thresh:
+            rows.append(m)
+    print(f"[diagnostic:breakout] {passed_green} passed Close>Open filter, "
+          f"{passed_rsi} of those also passed RSI filter, {len(rows)} passed all filters.")
+    return _to_result_df(rows)
 
 
 def main():
@@ -316,9 +374,14 @@ def main():
     parser.add_argument("--index", type=str, default=None,
                          help="Force a specific index instead of auto-detecting the top one "
                               f"(choices: {INDEX_UNIVERSES})")
-    parser.add_argument("--rsi", type=float, default=55, help="RSI(14) threshold (default 55)")
-    parser.add_argument("--volchg", type=float, default=50, help="Volume change %% threshold (default 50)")
-    parser.add_argument("--gap", type=float, default=0.01, help="Gap %% threshold (default 0.01)")
+    parser.add_argument("--rsi-pullback", type=float, default=50,
+                         help="RSI(14) threshold for the pullback-buy setup (default 50)")
+    parser.add_argument("--rsi-breakout", type=float, default=60,
+                         help="RSI(14) threshold for the momentum breakout setup (default 60)")
+    parser.add_argument("--volchg", type=float, default=50,
+                         help="Volume change %% threshold, shared by both setups (default 50)")
+    parser.add_argument("--gap", type=float, default=0.01,
+                         help="Gap %% threshold, used by the pullback-buy setup only (default 0.01)")
     args = parser.parse_args()
 
     print("Fetching live index constituent lists from NSE...")
@@ -338,20 +401,26 @@ def main():
         index_name = find_top_index(data, live_universes)
 
     print(f"\nScreening constituents of: {index_name}")
-    print(f"Filters -> Open>LTP, Gap%>{args.gap}, RSI>{args.rsi}, VolChg%>{args.volchg}\n")
+    metrics = compute_all_metrics(live_universes[index_name], data)
 
-    df = screen(live_universes[index_name], data, args.rsi, args.volchg, args.gap)
+    print(f"\n--- Pullback-buy setup (Open>LTP, Gap%>{args.gap}, RSI>{args.rsi_pullback}, VolChg%>{args.volchg}) ---")
+    pullback_df = filter_pullback_buy(metrics, args.rsi_pullback, args.volchg, args.gap)
+
+    print(f"\n--- Momentum breakout setup (Close>Open, RSI>{args.rsi_breakout}, VolChg%>{args.volchg}) ---")
+    breakout_df = filter_momentum_breakout(metrics, args.rsi_breakout, args.volchg)
 
     print("\n" + "=" * 60)
-    if df.empty:
-        print("No stocks matched all filters right now.")
-    else:
-        print(f"{len(df)} stock(s) matched — swing trade shortlist:\n")
-        print(df.to_string(index=False))
+    print("PULLBACK-BUY")
+    print(pullback_df.to_string(index=False) if not pullback_df.empty else "No matches.")
+    print("\nMOMENTUM BREAKOUT")
+    print(breakout_df.to_string(index=False) if not breakout_df.empty else "No matches.")
     print("=" * 60)
     print("Note: This is a screening tool for research purposes only, not investment advice.")
 
-    message = format_results_message(index_name, df, args.rsi, args.volchg, args.gap)
+    message = format_results_message(
+        index_name, pullback_df, breakout_df,
+        args.rsi_pullback, args.rsi_breakout, args.volchg, args.gap,
+    )
     send_telegram_message(message)
 
 
