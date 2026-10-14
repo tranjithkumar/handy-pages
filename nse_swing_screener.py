@@ -166,8 +166,9 @@ def _format_section(title: str, filters_desc: str, df: pd.DataFrame) -> str:
     else:
         lines.append(f"{len(df)} match(es):")
         for _, row in df.iterrows():
+            idx_tag = f" [{row['Index']}]" if row.get("Index") else ""
             lines.append(
-                f"*{row['Symbol']}*  LTP {row['LTP']}  "
+                f"*{row['Symbol']}*{idx_tag}  LTP {row['LTP']}  "
                 f"Gap {row['Gap%']}%  RSI {row['RSI(14)']}  Vol {row['VolChg%']}%"
             )
     return "\n".join(lines)
@@ -264,12 +265,17 @@ def find_top_index(data: pd.DataFrame, universes: dict) -> str:
     return top_index
 
 
-def compute_all_metrics(symbols, data):
+def compute_all_metrics(symbols, data, symbol_index_map=None):
     """One pass over every symbol computing the shared metrics both setups
     need (gap%, vol chg%, RSI, etc). Returns a list of dicts; each setup's
-    filter function below just applies its own conditions to this list."""
+    filter function below just applies its own conditions to this list.
+
+    symbol_index_map: optional dict of symbol -> "Index Name(s)" label,
+    used when screening a combined universe so results can still show
+    which index each stock came from."""
     metrics = []
     no_data = 0
+    symbol_index_map = symbol_index_map or {}
 
     for symbol in symbols:
         ticker = f"{symbol}.NS"
@@ -305,6 +311,7 @@ def compute_all_metrics(symbols, data):
 
         metrics.append({
             "Symbol": symbol,
+            "Index": symbol_index_map.get(symbol, ""),
             "Open": float(open_p),
             "Close": float(close_p),
             "PrevClose": float(prev_close),
@@ -372,8 +379,8 @@ def filter_momentum_breakout(metrics, rsi_thresh, volchg_thresh):
 def main():
     parser = argparse.ArgumentParser(description="NSE swing trade screener (Yahoo Finance)")
     parser.add_argument("--index", type=str, default=None,
-                         help="Force a specific index instead of auto-detecting the top one "
-                              f"(choices: {INDEX_UNIVERSES})")
+                         help="Restrict screening to a single index instead of the combined "
+                              f"universe of both (choices: {INDEX_UNIVERSES})")
     parser.add_argument("--rsi-pullback", type=float, default=50,
                          help="RSI(14) threshold for the pullback-buy setup (default 50)")
     parser.add_argument("--rsi-breakout", type=float, default=60,
@@ -391,17 +398,34 @@ def main():
     all_symbols = sorted(set(s for syms in live_universes.values() for s in syms))
     data = fetch_all_history(all_symbols)
 
+    # Informational only (not restricting the scan) unless --index is passed:
+    # shows which index is performing best today for context in the logs.
+    print("\nComparing today's performance across tracked indices (for context only)...")
+    try:
+        find_top_index(data, live_universes)
+    except RuntimeError as e:
+        print(f"[warn] {e}")
+
     if args.index:
         index_name = args.index.upper()
         if index_name not in INDEX_UNIVERSES:
             print(f"Unknown index '{index_name}'. Choices: {INDEX_UNIVERSES}", file=sys.stderr)
             sys.exit(1)
+        screen_symbols = live_universes[index_name]
+        symbol_index_map = {s: index_name for s in screen_symbols}
+        scope_label = index_name
     else:
-        print("\nComparing today's performance across tracked indices...")
-        index_name = find_top_index(data, live_universes)
+        # Combined universe: every stock in either index, tagged with which
+        # index (or both) it belongs to so results stay traceable.
+        symbol_index_map = {}
+        for name, syms in live_universes.items():
+            for s in syms:
+                symbol_index_map[s] = symbol_index_map.get(s, "") + ("+" if symbol_index_map.get(s) else "") + name
+        screen_symbols = sorted(symbol_index_map.keys())
+        scope_label = " + ".join(INDEX_UNIVERSES)
 
-    print(f"\nScreening constituents of: {index_name}")
-    metrics = compute_all_metrics(live_universes[index_name], data)
+    print(f"\nScreening combined universe: {scope_label} ({len(screen_symbols)} stocks)")
+    metrics = compute_all_metrics(screen_symbols, data, symbol_index_map)
 
     print(f"\n--- Pullback-buy setup (Open>LTP, Gap%>{args.gap}, RSI>{args.rsi_pullback}, VolChg%>{args.volchg}) ---")
     pullback_df = filter_pullback_buy(metrics, args.rsi_pullback, args.volchg, args.gap)
@@ -418,7 +442,7 @@ def main():
     print("Note: This is a screening tool for research purposes only, not investment advice.")
 
     message = format_results_message(
-        index_name, pullback_df, breakout_df,
+        scope_label, pullback_df, breakout_df,
         args.rsi_pullback, args.rsi_breakout, args.volchg, args.gap,
     )
     send_telegram_message(message)
