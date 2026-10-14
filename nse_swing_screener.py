@@ -385,8 +385,8 @@ def main():
                          help="RSI(14) threshold for the pullback-buy setup (default 50)")
     parser.add_argument("--rsi-breakout", type=float, default=60,
                          help="RSI(14) threshold for the momentum breakout setup (default 60)")
-    parser.add_argument("--volchg", type=float, default=50,
-                         help="Volume change %% threshold, shared by both setups (default 50)")
+    parser.add_argument("--volchg", type=float, default=20,
+                         help="Volume change %% threshold, shared by both setups (default 20)")
     parser.add_argument("--gap", type=float, default=0.01,
                          help="Gap %% threshold, used by the pullback-buy setup only (default 0.01)")
     args = parser.parse_args()
