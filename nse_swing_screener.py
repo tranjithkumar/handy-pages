@@ -441,11 +441,14 @@ def main():
     print("=" * 60)
     print("Note: This is a screening tool for research purposes only, not investment advice.")
 
-    message = format_results_message(
-        scope_label, pullback_df, breakout_df,
-        args.rsi_pullback, args.rsi_breakout, args.volchg, args.gap,
-    )
-    send_telegram_message(message)
+    if pullback_df.empty and breakout_df.empty:
+        print("\nNo matches in either setup -- staying silent, no Telegram message sent.")
+    else:
+        message = format_results_message(
+            scope_label, pullback_df, breakout_df,
+            args.rsi_pullback, args.rsi_breakout, args.volchg, args.gap,
+        )
+        send_telegram_message(message)
 
 
 if __name__ == "__main__":
