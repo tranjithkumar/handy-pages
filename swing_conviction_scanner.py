@@ -50,6 +50,9 @@ import os
 import sys
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
 from io import StringIO
 
 import numpy as np
@@ -224,7 +227,7 @@ def scan(symbols, data, rvol_thresh, rsi_low, rsi_high):
 def format_message(df: pd.DataFrame, top_n: int, rvol_thresh: float) -> str:
     header = (
         f"*High-Conviction Swing Scanner*\n"
-        f"Universe: NIFTY 200 | Run: {datetime.now().strftime('%Y-%m-%d %H:%M')} IST\n"
+        f"Universe: NIFTY 200 | Run: {datetime.now(IST).strftime('%Y-%m-%d %H:%M')} IST\n"
         f"Rules: EMA9>21>50 + 20D breakout + RSI 50-70 + RVOL>{rvol_thresh}x\n\n"
     )
     if df.empty:
@@ -241,12 +244,26 @@ def format_message(df: pd.DataFrame, top_n: int, rvol_thresh: float) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="High-conviction daily swing scanner (NIFTY 200)")
-    parser.add_argument("--rvol", type=float, default=1.3,
-                         help="Relative volume threshold, e.g. 1.3 = 30%% above 20-day average (default 1.3)")
+    parser.add_argument("--rvol", type=float, default=1.6,
+                         help="Relative volume threshold, e.g. 1.6 = 60%% above 20-day average (default 1.6)")
     parser.add_argument("--rsi-low", type=float, default=50, help="RSI lower bound (default 50)")
     parser.add_argument("--rsi-high", type=float, default=70, help="RSI upper bound (default 70)")
     parser.add_argument("--top", type=int, default=10, help="Max candidates to report (default 10)")
+    parser.add_argument("--window-start-hour", type=int, default=6,
+                         help="If the script fires before this IST hour, skip Telegram (default 6)")
+    parser.add_argument("--window-end-hour", type=int, default=11,
+                         help="If the script fires after this IST hour, skip Telegram -- catches "
+                              "GitHub Actions scheduling delays so results don't land at an "
+                              "unexpected hour like the middle of the night (default 11)")
     args = parser.parse_args()
+
+    now_ist = datetime.now(IST)
+    within_window = args.window_start_hour <= now_ist.hour < args.window_end_hour
+    if not within_window:
+        print(f"[warn] Script is running at {now_ist.strftime('%Y-%m-%d %H:%M')} IST, outside the "
+              f"intended {args.window_start_hour}:00-{args.window_end_hour}:00 IST morning window "
+              f"(likely a delayed GitHub Actions trigger). Will still screen and log results, but "
+              f"will NOT send a Telegram message this run.")
 
     print("Fetching live NIFTY 200 constituent list from NSE...")
     try:
@@ -272,6 +289,8 @@ def main():
 
     if df.empty:
         print("\nNo matches -- staying silent, no Telegram message sent.")
+    elif not within_window:
+        print("\nMatches found, but suppressing Telegram send -- outside the intended morning window.")
     else:
         message = format_message(df, args.top, args.rvol)
         send_telegram_message(message)
