@@ -2,9 +2,11 @@ name: NSE Swing Screener
 
 on:
   schedule:
-    # 19:00 IST on weekdays (market days) = 13:30 UTC.
+    # 8:00 AM IST on weekdays (before market open) = 02:30 UTC.
+    # Uses the PREVIOUS trading day's close, same data as an evening run
+    # would have used -- only the delivery time changes.
     # GitHub Actions cron is always UTC.
-    - cron: "30 13 * * 1-5"
+    - cron: "30 2 * * 1-5"
   workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
 
 jobs:
@@ -20,7 +22,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests pandas numpy yfinance
+        run: pip install requests pandas numpy yfinance tzdata
 
       - name: Run screener
         env:
