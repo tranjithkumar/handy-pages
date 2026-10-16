@@ -59,6 +59,9 @@ import os
 import sys
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
 
 import numpy as np
 import pandas as pd
@@ -179,7 +182,7 @@ def format_results_message(index_name: str, pullback_df: pd.DataFrame, breakout_
     header = (
         f"*NSE Swing Screener*\n"
         f"Index: `{index_name}`\n"
-        f"Run: {datetime.now().strftime('%Y-%m-%d %H:%M')} IST\n\n"
+        f"Run: {datetime.now(IST).strftime('%Y-%m-%d %H:%M')} IST\n\n"
     )
     pullback_section = _format_section(
         "Pullback-buy",
@@ -385,11 +388,26 @@ def main():
                          help="RSI(14) threshold for the pullback-buy setup (default 50)")
     parser.add_argument("--rsi-breakout", type=float, default=60,
                          help="RSI(14) threshold for the momentum breakout setup (default 60)")
-    parser.add_argument("--volchg", type=float, default=20,
-                         help="Volume change %% threshold, shared by both setups (default 20)")
+    parser.add_argument("--volchg", type=float, default=35,
+                         help="Volume change %% threshold, shared by both setups (default 35)")
     parser.add_argument("--gap", type=float, default=0.01,
                          help="Gap %% threshold, used by the pullback-buy setup only (default 0.01)")
+    parser.add_argument("--window-start-hour", type=int, default=6,
+                         help="If the script fires before this IST hour, skip Telegram (likely a "
+                              "misfired/early run) (default 6)")
+    parser.add_argument("--window-end-hour", type=int, default=11,
+                         help="If the script fires after this IST hour, skip Telegram -- this "
+                              "catches GitHub Actions scheduling delays so results don't land at "
+                              "an unexpected hour like the middle of the night (default 11)")
     args = parser.parse_args()
+
+    now_ist = datetime.now(IST)
+    within_window = args.window_start_hour <= now_ist.hour < args.window_end_hour
+    if not within_window:
+        print(f"[warn] Script is running at {now_ist.strftime('%Y-%m-%d %H:%M')} IST, outside the "
+              f"intended {args.window_start_hour}:00-{args.window_end_hour}:00 IST morning window "
+              f"(likely a delayed GitHub Actions trigger). Will still screen and log results, but "
+              f"will NOT send a Telegram message this run.")
 
     print("Fetching live index constituent lists from NSE...")
     live_universes = {name: get_index_universe(name) for name in INDEX_UNIVERSES}
@@ -443,6 +461,8 @@ def main():
 
     if pullback_df.empty and breakout_df.empty:
         print("\nNo matches in either setup -- staying silent, no Telegram message sent.")
+    elif not within_window:
+        print("\nMatches found, but suppressing Telegram send -- outside the intended morning window.")
     else:
         message = format_results_message(
             scope_label, pullback_df, breakout_df,
