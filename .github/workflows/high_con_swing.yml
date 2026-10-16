@@ -2,9 +2,10 @@ name: High-Conviction Swing Scanner
 
 on:
   schedule:
-    # 7:00 PM IST on weekdays (market days) = 13:30 UTC, same schedule as
-    # the other EOD swing screener since both use end-of-day daily data.
-    - cron: "30 13 * * 1-5"
+    # 8:00 AM IST on weekdays (before market open) = 02:30 UTC, same time
+    # as the other EOD swing screener since both use the previous trading
+    # day's close -- only the delivery time changes.
+    - cron: "30 2 * * 1-5"
   workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
 
 jobs:
@@ -20,7 +21,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests pandas numpy yfinance
+        run: pip install requests pandas numpy yfinance tzdata
 
       - name: Run swing conviction scanner
         env:
